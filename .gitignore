@@ -1,0 +1,37 @@
+examples/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.js
+!examples/*.js
+!runtime/*.js
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Build artifacts
+*.tgz
+*.zip
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
