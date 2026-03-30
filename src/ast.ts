@@ -22,6 +22,7 @@ export type NodeType =
   | 'PipeExpr'
   | 'BlockExpr'
   | 'ReturnExpr'
+  | 'AwaitExpr'
   | 'ImportStmt'
   | 'TypeDecl'
   | 'Pattern'
@@ -185,6 +186,11 @@ export interface ReturnExpr extends Node {
   value?: Node;
 }
 
+export interface AwaitExpr extends Node {
+  type: 'AwaitExpr';
+  expression: Node;
+}
+
 export interface ImportStmt extends Node {
   type: 'ImportStmt';
   module: string;
@@ -212,7 +218,7 @@ export type Pattern =
   | { type: 'WildcardPattern' }
   | { type: 'IdentifierPattern'; name: string; as?: string }
   | { type: 'LiteralPattern'; literal: NumberLiteral | StringLiteral | BooleanLiteral | NoneLiteral }
-  | { type: 'RecordPattern'; fields: { key: string; pattern: Pattern }[]; rest?: string }
+  | { type: 'RecordPattern'; fields: { key: string; pattern: Pattern; defaultValue?: Node }[]; rest?: string }
   | { type: 'TuplePattern'; elements: Pattern[] }
   | { type: 'ListPattern'; elements: Pattern[]; rest?: string }
   | { type: 'ConstructorPattern'; name: string; patterns: Pattern[] };
