@@ -23,6 +23,40 @@ describe('Lexer', () => {
     expect(tokens[0].value).toBe('Hello ${name}');
   });
 
+  it('tokenizes integers and floats', () => {
+    const testCases = [
+      { input: '42', expected: ['42'] },
+      { input: '3.14', expected: ['3.14'] },
+      { input: '0.5', expected: ['0.5'] },
+      { input: '1.0', expected: ['1.0'] },
+    ];
+
+    for (const { input, expected } of testCases) {
+      const tokens = tokenize(input).filter(t => t.type === 'NUMBER');
+      const values = tokens.map(t => t.value);
+      expect(values).toEqual(expected, `Failed for input: ${input}`);
+    }
+  });
+
+  it('rejects multiple dots in numbers', () => {
+    const tokens = tokenize('1.2.3');
+    const numbers = tokens.filter(t => t.type === 'NUMBER').map(t => t.value);
+    const punctuation = tokens.filter(t => t.type === 'PUNCTUATION').map(t => t.value);
+    
+    // Should tokenize as: NUMBER(1.2) + PUNCTUATION(.) + NUMBER(3)
+    expect(numbers).toEqual(['1.2', '3']);
+    expect(punctuation).toContain('.');
+  });
+
+  it('handles trailing dot as punctuation', () => {
+    const tokens = tokenize('1.');
+    const numbers = tokens.filter(t => t.type === 'NUMBER').map(t => t.value);
+    const punctuation = tokens.filter(t => t.type === 'PUNCTUATION').map(t => t.value);
+    
+    expect(numbers).toEqual(['1']);
+    expect(punctuation).toEqual(['.']);
+  });
+
   it('processes escape sequences in strings', () => {
     // Test common escape sequences with explicit test cases
     const testCases = [

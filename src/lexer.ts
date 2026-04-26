@@ -179,10 +179,24 @@ export function tokenize(source: string): Token[] {
     // Numbers
     if (/\d/.test(char)) {
       let value = '';
+      let hasDot = false;
       while (pos < source.length && /[\d.]/.test(source[pos])) {
+        if (source[pos] === '.') {
+          // Only allow one decimal point
+          if (hasDot) break;
+          // Don't allow dot at the start
+          if (value.length === 0) break;
+          hasDot = true;
+        }
         value += source[pos];
         pos++;
         column++;
+      }
+      // Remove trailing dot if present (e.g., "1." -> "1")
+      if (value.endsWith('.')) {
+        value = value.slice(0, -1);
+        pos--;
+        column--;
       }
       tokens.push({ type: 'NUMBER', value, line, column });
       continue;
