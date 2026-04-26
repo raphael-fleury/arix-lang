@@ -31,6 +31,9 @@ export const OPERATORS = [
   '::', '??', '??=', '->', '=>',
 ] as const;
 
+// Operators sorted by length (descending) for greedy matching
+const OPERATORS_BY_LENGTH = [...OPERATORS].sort((a, b) => b.length - a.length);
+
 export const PUNCTUATION = [
   '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '|',
 ] as const;
@@ -175,22 +178,18 @@ export function tokenize(source: string): Token[] {
       }
     }
 
-    // Multi-character operators
-    const twoChar = source.slice(pos, pos + 2);
-    if (operators.has(twoChar)) {
-      tokens.push({ type: 'OPERATOR', value: twoChar, line, column });
-      pos += 2;
-      column += 2;
-      continue;
+    // Operators: try longest matches first (greedy)
+    let operatorFound = false;
+    for (const op of OPERATORS_BY_LENGTH) {
+      if (source.slice(pos, pos + op.length) === op) {
+        tokens.push({ type: 'OPERATOR', value: op, line, column });
+        pos += op.length;
+        column += op.length;
+        operatorFound = true;
+        break;
+      }
     }
-
-    // Single-character operators
-    if (operators.has(char)) {
-      tokens.push({ type: 'OPERATOR', value: char, line, column });
-      pos++;
-      column++;
-      continue;
-    }
+    if (operatorFound) continue;
 
     // Punctuation
     if (punctuation.has(char)) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tokenize } from '../src/lexer.js';
+import { tokenize, OPERATORS } from '../src/lexer.js';
 
 function nonEmpty(tokens: ReturnType<typeof tokenize>) {
   return tokens.filter(t => !(t.type === 'EOF' && t.value === ''));
@@ -139,5 +139,23 @@ describe('Lexer', () => {
     // Should have: NEWLINE, INDENT (before result), ..., no DEDENT before EOF
     expect(types.filter(t => t === 'INDENT')).toHaveLength(1);
     expect(types.filter(t => t === 'DEDENT')).toHaveLength(1); // One at EOF
+  });
+
+  it('tokenizes 3-character operator ??= correctly (greedy match)', () => {
+    const tokens = tokenize('x ??= 5');
+    const ops = tokens.filter(t => t.type === 'OPERATOR').map(t => t.value);
+    expect(ops).toEqual(['??=']);
+  });
+
+  it('tokenizes all operators as single tokens with greedy matching', () => {
+    for (const op of OPERATORS) {
+      // Wrap operator with spaces and identifier to ensure isolation
+      const code = `a ${op} b`;
+      const tokens = tokenize(code);
+      const operators = tokens.filter(t => t.type === 'OPERATOR');
+      
+      expect(operators).toHaveLength(1);
+      expect(operators[0].value).toBe(op);
+    }
   });
 });
