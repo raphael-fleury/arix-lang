@@ -21,14 +21,14 @@ export interface Token {
 export const KEYWORDS = [
   'fn', 'let', 'mut', 'public', 'internal', 'match', 'when',
   'import', 'type', 'if', 'then', 'else', 'try', 'catch', 'async', 'await',
-  'true', 'false', 'None', 'as', 'in', 'for',
+  'true', 'false', 'as', 'in', 'for',
   'where', 'return', 'yield', 'throw', 'break', 'continue', 'loop',
 ] as const;
 
 export const OPERATORS = [
   '+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=',
-  '&&', '||', '!', '=', '+=', '-=', '*=', '/=', '|>', '++', '--',
-  '..', '::', '??', '??=', '->', '=>', '..', '...',
+  '&&', '||', '!', '=', '+=', '-=', '*=', '/=', '|>', '++',
+  '::', '??', '??=', '->', '=>',
 ] as const;
 
 export const PUNCTUATION = [
@@ -44,29 +44,75 @@ export function tokenize(source: string): Token[] {
   const keywords = new Set(KEYWORDS);
   const operators = new Set<string>(OPERATORS);
   const punctuation = new Set<string>(PUNCTUATION);
+  
+  // Indentation tracking
+  const indentStack: number[] = [0];
+  let atLineStart = true;
+  let currentLineIndent = 0;
+
+  const emitIndentTokens = (newIndent: number) => {
+    const currentIndent = indentStack[indentStack.length - 1];
+    
+    if (newIndent > currentIndent) {
+      indentStack.push(newIndent);
+      tokens.push({ type: 'INDENT', value: '', line, column: 1 });
+    } else if (newIndent < currentIndent) {
+      while (indentStack.length > 1 && indentStack[indentStack.length - 1] > newIndent) {
+        indentStack.pop();
+        tokens.push({ type: 'DEDENT', value: '', line, column: 1 });
+      }
+    }
+  };
 
   while (pos < source.length) {
     const char = source[pos];
 
-    if (/\s/.test(char)) {
-      if (char === '\n') {
-        tokens.push({ type: 'NEWLINE', value: '\n', line, column });
-        line++;
-        column = 1;
-      } else {
-        column++;
-      }
+    // Handle newlines
+    if (char === '\n') {
+      tokens.push({ type: 'NEWLINE', value: '\n', line, column });
+      line++;
+      column = 1;
+      pos++;
+      atLineStart = true;
+      currentLineIndent = 0;
+      continue;
+    }
+
+    // Process indentation at line start
+    if (atLineStart && char === ' ') {
+      currentLineIndent++;
+      column++;
       pos++;
       continue;
     }
 
+    // At first non-space character on a line
+    if (atLineStart && char !== '\n') {
+      // Skip comment-only lines and empty lines
+      if (char !== '#') {
+        emitIndentTokens(currentLineIndent);
+      }
+      atLineStart = false;
+    }
+
+    // Skip comments
     if (char === '#') {
       while (pos < source.length && source[pos] !== '\n') {
         pos++;
       }
+      atLineStart = true;
+      currentLineIndent = 0;
       continue;
     }
 
+    // Skip other whitespace
+    if (/\s/.test(char)) {
+      column++;
+      pos++;
+      continue;
+    }
+
+    // String literals
     if (char === '"') {
       if (source.slice(pos, pos + 3) === '"""') {
         const end = source.indexOf('"""', pos + 3);
@@ -88,6 +134,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
+    // Numbers
     if (/\d/.test(char)) {
       let value = '';
       while (pos < source.length && /[\d.]/.test(source[pos])) {
@@ -99,6 +146,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
+    // Identifiers and keywords
     if (/[a-zA-Z_]/.test(char)) {
       let value = '';
       while (pos < source.length && /[a-zA-Z0-9_\-]/.test(source[pos])) {
@@ -111,7 +159,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Handle relative paths ./ and ../
+    // Relative imports
     if (char === '.') {
       if (source.slice(pos, pos + 2) === './') {
         tokens.push({ type: 'RELATIVE', value: './', line, column });
@@ -127,6 +175,7 @@ export function tokenize(source: string): Token[] {
       }
     }
 
+    // Multi-character operators
     const twoChar = source.slice(pos, pos + 2);
     if (operators.has(twoChar)) {
       tokens.push({ type: 'OPERATOR', value: twoChar, line, column });
@@ -135,6 +184,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
+    // Single-character operators
     if (operators.has(char)) {
       tokens.push({ type: 'OPERATOR', value: char, line, column });
       pos++;
@@ -142,6 +192,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
+    // Punctuation
     if (punctuation.has(char)) {
       tokens.push({ type: 'PUNCTUATION', value: char, line, column });
       pos++;
@@ -149,8 +200,15 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
+    // Unknown character - skip
     pos++;
     column++;
+  }
+
+  // Emit remaining DEDENT tokens at EOF
+  while (indentStack.length > 1) {
+    indentStack.pop();
+    tokens.push({ type: 'DEDENT', value: '', line, column });
   }
 
   tokens.push({ type: 'EOF', value: '', line, column });
