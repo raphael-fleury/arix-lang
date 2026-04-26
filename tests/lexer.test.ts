@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tokenize, OPERATORS } from '../src/lexer.js';
+import { tokenize, OPERATORS, ESCAPE_SEQUENCES } from '../src/lexer.js';
 
 function nonEmpty(tokens: ReturnType<typeof tokenize>) {
   return tokens.filter(t => !(t.type === 'EOF' && t.value === ''));
@@ -21,6 +21,30 @@ describe('Lexer', () => {
   it('tokenizes string interpolation', () => {
     const tokens = tokenize('"Hello ${name}"');
     expect(tokens[0].value).toBe('Hello ${name}');
+  });
+
+  it('processes escape sequences in strings', () => {
+    // Test common escape sequences with explicit test cases
+    const testCases = [
+      { input: '"hello\\nworld"', expected: 'hello\nworld' },
+      { input: '"hello\\tworld"', expected: 'hello\tworld' },
+      { input: '"hello\\\\world"', expected: 'hello\\world' },
+      { input: '"test\\rend"', expected: 'test\rend' },
+      { input: '"test\\bend"', expected: 'test\bend' },
+      { input: '"test\\fend"', expected: 'test\fend' },
+      { input: '"test\\vend"', expected: 'test\vend' },
+    ];
+
+    for (const { input, expected } of testCases) {
+      const tokens = tokenize(input);
+      expect(tokens[0].type).toBe('STRING');
+      expect(tokens[0].value).toBe(expected);
+    }
+  });
+
+  it('handles unicode escape sequences \\uXXXX', () => {
+    const tokens = tokenize('"\\u0041"'); // \u0041 = 'A'
+    expect(tokens[0].value).toBe('A');
   });
 
   it('skips # comments (does not emit tokens for them)', () => {

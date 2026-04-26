@@ -38,6 +38,45 @@ export const PUNCTUATION = [
   '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '|',
 ] as const;
 
+// Map of escape sequences to their actual characters
+export const ESCAPE_SEQUENCES: Record<string, string> = {
+  '\\n': '\n',
+  '\\t': '\t',
+  '\\r': '\r',
+  '\\b': '\b',
+  '\\f': '\f',
+  '\\v': '\v',
+  '\\\\': '\\',
+  '\\"': '"',
+};
+
+function processEscapeSequences(str: string): string {
+  let result = '';
+  let i = 0;
+  while (i < str.length) {
+    if (str[i] === '\\' && i + 1 < str.length) {
+      const twoChar = str.slice(i, i + 2);
+      if (twoChar in ESCAPE_SEQUENCES) {
+        result += ESCAPE_SEQUENCES[twoChar];
+        i += 2;
+        continue;
+      }
+      // Unicode escape: \uXXXX
+      if (str[i + 1] === 'u' && i + 5 < str.length) {
+        const hexCode = str.slice(i + 2, i + 6);
+        if (/^[0-9a-fA-F]{4}$/.test(hexCode)) {
+          result += String.fromCharCode(parseInt(hexCode, 16));
+          i += 6;
+          continue;
+        }
+      }
+    }
+    result += str[i];
+    i++;
+  }
+  return result;
+}
+
 export function tokenize(source: string): Token[] {
   const tokens: Token[] = [];
   let pos = 0;
@@ -119,7 +158,7 @@ export function tokenize(source: string): Token[] {
     if (char === '"') {
       if (source.slice(pos, pos + 3) === '"""') {
         const end = source.indexOf('"""', pos + 3);
-        const value = source.slice(pos + 3, end);
+        const value = processEscapeSequences(source.slice(pos + 3, end));
         tokens.push({ type: 'STRING', value, line, column });
         pos = end + 3;
         column += end - pos;
@@ -131,7 +170,7 @@ export function tokenize(source: string): Token[] {
           pos++;
           column++;
         }
-        tokens.push({ type: 'STRING', value, line, column });
+        tokens.push({ type: 'STRING', value: processEscapeSequences(value), line, column });
         pos++;
       }
       continue;
