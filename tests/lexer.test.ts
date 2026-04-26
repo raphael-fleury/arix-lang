@@ -216,4 +216,34 @@ describe('Lexer', () => {
       expect(operators[0].value).toBe(op);
     }
   });
+
+  it('detects unterminated strings', () => {
+    const tokens = tokenize('"hello world');
+    const errors = tokens.filter(t => t.type === 'ERROR');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('Unterminated string');
+  });
+
+  it('detects unterminated triple-quoted strings', () => {
+    const tokens = tokenize('"""hello world');
+    const errors = tokens.filter(t => t.type === 'ERROR');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('Unterminated triple-quoted string');
+  });
+
+  it('reports unexpected characters as ERROR tokens', () => {
+    const tokens = tokenize('a @ b');
+    const errors = tokens.filter(t => t.type === 'ERROR');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].value).toBe('@');
+    expect(errors[0].message).toContain('Unexpected character');
+  });
+
+  it('includes line and column info in ERROR tokens', () => {
+    const tokens = tokenize('a\n  @');
+    const errors = tokens.filter(t => t.type === 'ERROR');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].line).toBe(2);
+    expect(errors[0].column).toBe(3);
+  });
 });

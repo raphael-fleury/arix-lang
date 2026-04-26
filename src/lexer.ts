@@ -9,6 +9,7 @@ export type TokenType =
   | 'NEWLINE'
   | 'INDENT'
   | 'DEDENT'
+  | 'ERROR'
   | 'EOF';
 
 export interface Token {
@@ -16,6 +17,7 @@ export interface Token {
   value: string;
   line: number;
   column: number;
+  message?: string; // Error message for ERROR tokens
 }
 
 export const KEYWORDS = [
@@ -156,8 +158,22 @@ export function tokenize(source: string): Token[] {
 
     // String literals
     if (char === '"') {
+      const stringStartCol = column;
+      const stringStartLine = line;
+      
       if (source.slice(pos, pos + 3) === '"""') {
         const end = source.indexOf('"""', pos + 3);
+        if (end === -1) {
+          // Unterminated triple-quoted string
+          tokens.push({
+            type: 'ERROR',
+            value: source.slice(pos),
+            line,
+            column: stringStartCol,
+            message: `Unterminated triple-quoted string starting at line ${stringStartLine}:${stringStartCol}`,
+          });
+          break;
+        }
         const value = processEscapeSequences(source.slice(pos + 3, end));
         tokens.push({ type: 'STRING', value, line, column });
         pos = end + 3;
@@ -170,6 +186,19 @@ export function tokenize(source: string): Token[] {
           pos++;
           column++;
         }
+        
+        if (pos >= source.length) {
+          // Unterminated string
+          tokens.push({
+            type: 'ERROR',
+            value: value,
+            line: stringStartLine,
+            column: stringStartCol,
+            message: `Unterminated string starting at line ${stringStartLine}:${stringStartCol}`,
+          });
+          break;
+        }
+        
         tokens.push({ type: 'STRING', value: processEscapeSequences(value), line, column });
         pos++;
       }
@@ -252,7 +281,14 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Unknown character - skip
+    // Unknown character - emit ERROR token
+    tokens.push({
+      type: 'ERROR',
+      value: char,
+      line,
+      column,
+      message: `Unexpected character '${char}'`,
+    });
     pos++;
     column++;
   }
