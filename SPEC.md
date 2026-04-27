@@ -214,15 +214,97 @@ let (num, str) = pair
 
 ---
 
-## 8. Modules and Imports
+## 8. Loops
+
+### 8.1 For Loops
+
+For loops iterate over iterables with pattern matching support.
+
+```python
+# Simple iteration
+for x in [1, 2, 3]:
+    print(x)
+
+# With pattern matching
+for Ok(value) in results:
+    print(value)
+
+for (x, y) in pairs:
+    print("${x}, ${y}")
+
+# With filtering
+for x in nums if x > 0:
+    print(x)
+```
+
+#### Loop Variables
+- Loop variables are **immutable** within the loop scope
+
+```python
+let mut sum = 0
+for x in [1, 2, 3]:
+    sum = sum + x
+
+print(sum)  # 6
+print(x) # Error: "x" only exists inside the loop
+```
+
+### 8.2 While Loops
+
+While loops repeat while a condition is true.
+
+```python
+# Basic while loop
+let mut counter = 0
+while counter < 5:
+    counter = counter + 1
+    print(counter)
+
+# With break
+let mut x = 0
+while true:
+    x = x + 1
+    if x > 10:
+        break
+
+# With continue
+let mut x = 0
+while x < 5:
+    x = x + 1
+    if x == 2:
+        continue
+    print(x)
+```
+
+#### Loop Keywords
+- `break` - Exit the loop immediately
+- `continue` - Skip to the next iteration
+
+```python
+# Break example
+for x in [1, 2, 3, 4, 5]:
+    if x == 3:
+        break
+    print(x)  # Prints: 1, 2
+
+# Continue example
+for x in [1, 2, 3, 4, 5]:
+    if x == 2:
+        continue
+    print(x)  # Prints: 1, 3, 4, 5
+```
+
+---
+
+## 9. Modules and Imports
 
 Purl uses ES Modules (ESM) for JavaScript interoperability. Each `.purl` file is a module.
 
-### 8.1 File Naming Convention
+### 9.1 File Naming Convention
 - Files use **kebab-case**: `user-service.purl`, `my-utils.purl`
 - Module name derives from filename: `user-service.purl` → `user-service`
 
-### 8.2 Import Syntax
+### 9.2 Import Syntax
 ```python
 # Local module (searches in src/ and project root)
 import user-service
@@ -242,14 +324,14 @@ import option
 import list
 ```
 
-### 8.3 Module Resolution
+### 9.3 Module Resolution
 ```
 1. Relative imports (./foo, ../foo) → ./foo.purl
 2. Named imports (foo-bar) → {src,root}/foo-bar.purl
 3. Stdlib (result, option, list) → built-in runtime
 ```
 
-### 8.4 Visibility
+### 9.4 Visibility
 ```python
 # Private (default) - file only
 fn helper() = ...
@@ -261,7 +343,7 @@ fn helper() = ...
 public fn publicFunc() = ...
 ```
 
-### 8.5 Compilation
+### 9.5 Compilation
 ```bash
 # Compile single file (resolves and compiles dependencies)
 purl build src/main.purl -o dist/
@@ -276,7 +358,7 @@ dist/
 └── helper-utils.js
 ```
 
-### 8.6 Example Project Structure
+### 9.6 Example Project Structure
 ```
 project/
 ├── src/
@@ -291,23 +373,23 @@ project/
 
 ---
 
-## 9. Error Handling
+## 10. Error Handling
 
-### 9.1 Option Type
+### 10.1 Option Type
 ```python
 type Option(a) = Some(a) | None
 
 fn findUser(id Int) Option(User) = ...
 ```
 
-### 9.2 Result Type
+### 10.2 Result Type
 ```python
 type Result(a, e) = Ok(a) | Err(e)
 
 fn parseInt(s String) Result(Int, String) = ...
 ```
 
-### 9.3 Async Error Handling
+### 10.3 Async Error Handling
 ```python
 async fn fetchUser(id Int) Result(User, String) =
     try await http.get("/api/users/${id}")
@@ -317,9 +399,9 @@ async fn fetchUser(id Int) Result(User, String) =
 
 ---
 
-## 10. Documentation
+## 11. Documentation
 
-### 10.1 Docstrings
+### 11.1 Docstrings
 ```python
 """
 Calculates the area of a shape.
@@ -328,7 +410,7 @@ Returns the value in square units.
 fn area(shape Shape) Float = ...
 ```
 
-### 10.2 Type Annotations
+### 11.2 Type Annotations
 ```python
 public fn fetchUser
     """Fetches a user by ID.
@@ -343,7 +425,7 @@ public fn fetchUser
 
 ---
 
-## 11. Reserved Keywords
+## 12. Reserved Keywords
 ```
 fn, let, let mut, if, else, match, when, import, type,
 public, internal, async, await, try, catch, throw,
@@ -353,16 +435,16 @@ true, false, None, Ok, Err, Some, module, where, use
 
 ---
 
-## 12. Examples
+## 13. Examples
 
-### 12.1 Hello World
+### 13.1 Hello World
 ```python
 fn main() =
     let name = "World"
     print("Hello, ${name}!")
 ```
 
-### 12.2 Functional Pipeline
+### 13.2 Functional Pipeline
 ```python
 fn processNumbers(nums List(Int)) Int =
     nums
@@ -375,7 +457,7 @@ public fn main() =
     print(result)  # 16
 ```
 
-### 12.3 Pattern Matching
+### 13.3 Pattern Matching
 ```python
 type Shape = Circle(r Float) | Rectangle(w Float, h Float)
 
@@ -392,7 +474,7 @@ fn describe(shape Shape) String =
         _ -> "Rectangle"
 ```
 
-### 12.4 Async/Await
+### 13.4 Async/Await
 ```python
 async fn fetchUserData(id Int) Result(User, String) =
     let response = await http.get("/api/users/${id}")
@@ -469,4 +551,4 @@ type Tuple3(a, b, c) = (a, b, c)
 ---
 
 *Version: 1.0-draft*
-*Last Updated: 2026-03-29*
+*Last Updated: 2026-04-27*
