@@ -125,11 +125,12 @@ async fn fetchUser(id Int) Result(User, String) =
 
 ### 5.4 Section Operators
 ```python
-nums.map(* 2)           # x => x * 2
-nums.filter(> 3)        # x => x > 3
-nums.filter(== 0)       # x => x == 0
-list.map(++ "!")        # x => x ++ "!"
-add = (+)               # (a, b) => a + b
+(* 2)     # x => x * 2
+(> 3)     # x => x > 3
+(3 >)     # x => 3 > x
+(== 0)    # x => x == 0
+(++ "!")  # x => x ++ "!"
+(+)       # (a, b) => a + b
 ```
 
 ### 5.5 Pipe Operator
@@ -180,14 +181,14 @@ let nums = [10, 20, 30]
 evens = [x for x in nums if x % 2 == 0]
 doubled = [x * 2 for x in nums]
 
-# Index access (Rust-style with .get())
-nums.get(0)              # Option(Int) => Some(10)
-nums.get(5)              # Option(Int) => None
-nums.get(5, 0)           # Int => 0 (default fallback)
-nums.getFirst()          # Option(Int) => Some(10)
-nums.getLast()           # Option(Int) => Some(30)
-nums.length()            # Int => 3
-nums.isEmpty()          # Bool => False
+# Access and functions
+nums !! 0                # Option(Int) => Some(10)
+nums !! 5                # Option(Int) => None
+nums !! 5 ?? 0           # Int => 0 (default fallback)
+head nums                # Option(Int) => Some(10)
+last nums                # Option(Int) => Some(30)
+length nums              # Int => 3
+isEmpty nums             # Bool => False
 ```
 
 ### 7.2 Options and Results
@@ -371,7 +372,7 @@ fn processNumbers(nums List(Int)) Int =
 
 public fn main() =
     let result = processNumbers([1, -2, 3, -4, 5])
-    print(result.show())  # 16
+    print(result)  # 16
 ```
 
 ### 12.3 Pattern Matching
@@ -396,7 +397,7 @@ fn describe(shape Shape) String =
 async fn fetchUserData(id Int) Result(User, String) =
     let response = await http.get("/api/users/${id}")
     match response:
-        Ok(r) if r.ok -> Ok(r.json())
+        Ok(r) if r.ok -> Ok(toJson(r))
         Ok(r) -> Err("Request failed: ${r.status}")
         Err(e) -> Err("Network error: ${e.message}")
 
