@@ -34,7 +34,7 @@ describe('Lexer', () => {
     for (const { input, expected } of testCases) {
       const tokens = tokenize(input).filter(t => t.type === 'NUMBER');
       const values = tokens.map(t => t.value);
-      expect(values).toEqual(expected, `Failed for input: ${input}`);
+      expect(values).toEqual(expected);
     }
   });
 
@@ -58,21 +58,11 @@ describe('Lexer', () => {
   });
 
   it('processes escape sequences in strings', () => {
-    // Test common escape sequences with explicit test cases
-    const testCases = [
-      { input: '"hello\\nworld"', expected: 'hello\nworld' },
-      { input: '"hello\\tworld"', expected: 'hello\tworld' },
-      { input: '"hello\\\\world"', expected: 'hello\\world' },
-      { input: '"test\\rend"', expected: 'test\rend' },
-      { input: '"test\\bend"', expected: 'test\bend' },
-      { input: '"test\\fend"', expected: 'test\fend' },
-      { input: '"test\\vend"', expected: 'test\vend' },
-    ];
-
-    for (const { input, expected } of testCases) {
-      const tokens = tokenize(input);
+    for (const [escaped, actual] of Object.entries(ESCAPE_SEQUENCES)) {
+      const code = `"hello${escaped}world"`;
+      const tokens = tokenize(code);
       expect(tokens[0].type).toBe('STRING');
-      expect(tokens[0].value).toBe(expected);
+      expect(tokens[0].value).toBe(`hello${actual}world`);
     }
   });
 

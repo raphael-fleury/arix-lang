@@ -28,9 +28,11 @@ export const KEYWORDS = [
 ] as const;
 
 export const OPERATORS = [
-  '+', '-', '*', '/', '%', '==', '!=', '<', '>', '<=', '>=',
-  '&&', '||', '!', '=', '+=', '-=', '*=', '/=', '|>', '++',
-  '::', '??', '??=', '->', '=>',
+  '+', '-', '*', '/', '%', // Arithmetic
+  '==', '!=', '<', '>', '<=', '>=', // Comparison
+  '&&', '||', '!', // Logical
+  '++', '+=', '-=', '*=', '/=', '??=', // Mutation
+  '=', '??', '->', '=>', '|>', // Other
 ] as const;
 
 // Operators sorted by length (descending) for greedy matching
@@ -181,10 +183,20 @@ export function tokenize(source: string): Token[] {
       } else {
         pos++;
         let value = '';
-        while (pos < source.length && source[pos] !== '"') {
-          value += source[pos];
-          pos++;
-          column++;
+        while (pos < source.length) {
+          if (source[pos] === '\\' && pos + 1 < source.length) {
+            // Handle escape sequence
+            value += source[pos];
+            value += source[pos + 1];
+            pos += 2;
+            column += 2;
+          } else if (source[pos] === '"') {
+            break;
+          } else {
+            value += source[pos];
+            pos++;
+            column++;
+          }
         }
         
         if (pos >= source.length) {
