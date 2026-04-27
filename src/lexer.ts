@@ -32,7 +32,7 @@ export const OPERATORS = [
   '==', '!=', '<', '>', '<=', '>=', // Comparison
   '&&', '||', '!', // Logical
   '++', '+=', '-=', '*=', '/=', '??=', // Mutation
-  '=', '??', '->', '=>', '|>', // Other
+  '=', '!!', '??', '->', '=>', '|>', // Other
 ] as const;
 
 // Operators sorted by length (descending) for greedy matching
