@@ -176,4 +176,36 @@ describe('Parser', () => {
     expect(comp.pattern.type).toBe('ConstructorPattern');
     expect(comp.pattern.name).toBe('Ok');
   });
+
+  it('parses string interpolation - simple', () => {
+    const ast = parse('"Hello ${name}"');
+    expect(ast.body[0].type).toBe('StringInterpolation');
+    const interp = ast.body[0] as any;
+    expect(interp.parts.length).toBe(2);
+    expect(interp.parts[0].type).toBe('StringPart');
+    expect(interp.parts[0].value).toBe('Hello ');
+    expect(interp.parts[1].type).toBe('ExprPart');
+    expect(interp.parts[1].expr.type).toBe('Identifier');
+    expect(interp.parts[1].expr.name).toBe('name');
+  });
+
+  it('parses string interpolation - multiple expressions', () => {
+    const ast = parse('"${x} + ${y} = ${result}"');
+    expect(ast.body[0].type).toBe('StringInterpolation');
+    const interp = ast.body[0] as any;
+    expect(interp.parts.length).toBe(5);
+    expect(interp.parts[0].type).toBe('ExprPart');
+    expect(interp.parts[1].type).toBe('StringPart');
+    expect(interp.parts[2].type).toBe('ExprPart');
+    expect(interp.parts[3].type).toBe('StringPart');
+    expect(interp.parts[4].type).toBe('ExprPart');
+  });
+
+  it('parses string interpolation - expression call', () => {
+    const ast = parse('"Result: ${obj.method()}"');
+    expect(ast.body[0].type).toBe('StringInterpolation');
+    const interp = ast.body[0] as any;
+    expect(interp.parts[1].type).toBe('ExprPart');
+    expect(interp.parts[1].expr.type).toBe('CallExpr');
+  });
 });

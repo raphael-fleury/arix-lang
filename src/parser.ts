@@ -4,6 +4,9 @@ import type {
   Program,
   NumberLiteral,
   StringLiteral,
+  StringInterpolation,
+  StringPart,
+  ExprPart,
   BooleanLiteral,
   NoneLiteral,
   Identifier,
@@ -659,6 +662,11 @@ class Parser {
       return { type: 'StringLiteral', value: token.value } as StringLiteral;
     }
 
+    if (token.type === 'INTERPOLATED_STRING') {
+      this.advance();
+      return this.parseInterpolatedString(token.value);
+    }
+
     if (token.type === 'KEYWORD') {
       if (token.value === 'true' || token.value === 'false') {
         this.advance();
@@ -699,6 +707,59 @@ class Parser {
     }
 
     throw new Error(`Unexpected token: ${token.type} "${token.value}" at ${token.line}:${token.column}`);
+  }
+
+  private parseInterpolatedString(rawString: string): StringInterpolation {
+    const parts: (StringPart | ExprPart)[] = [];
+    let currentPart = '';
+    let i = 0;
+
+    while (i < rawString.length) {
+      if (rawString[i] === '$' && rawString[i + 1] === '{') {
+        // Save any accumulated string part
+        if (currentPart.length > 0) {
+          parts.push({ type: 'StringPart', value: currentPart });
+          currentPart = '';
+        }
+
+        // Find the matching closing brace
+        i += 2; // skip ${
+        let braceDepth = 1;
+        let exprStart = i;
+
+        while (i < rawString.length && braceDepth > 0) {
+          if (rawString[i] === '{') braceDepth++;
+          else if (rawString[i] === '}') braceDepth--;
+          if (braceDepth > 0) i++;
+        }
+
+        const exprCode = rawString.slice(exprStart, i);
+        
+        // Parse the expression
+        const exprTokens = tokenize(exprCode);
+        const exprParser = new Parser();
+        exprParser.tokens = exprTokens;
+        exprParser.pos = 0;
+        const expr = exprParser.parseExpr();
+
+        parts.push({ type: 'ExprPart', expr });
+        i++; // skip the closing }
+      } else if (rawString[i] === '\\' && rawString[i + 1] === '$') {
+        // Escaped dollar sign
+        currentPart += '$';
+        i += 2;
+      } else {
+        currentPart += rawString[i];
+        i++;
+      }
+    }
+
+    // Add any remaining string part
+    if (currentPart.length > 0) {
+      parts.push({ type: 'StringPart', value: currentPart });
+    }
+
+    return { type: 'StringInterpolation', parts } as StringInterpolation;
   }
 
   private parseSectionOperator(): Node {

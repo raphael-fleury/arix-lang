@@ -2,6 +2,7 @@ export type NodeType =
   | 'Program'
   | 'NumberLiteral'
   | 'StringLiteral'
+  | 'StringInterpolation'
   | 'BooleanLiteral'
   | 'NoneLiteral'
   | 'Identifier'
@@ -18,6 +19,7 @@ export type NodeType =
   | 'MatchArm'
   | 'RecordLiteral'
   | 'ListLiteral'
+  | 'ListComprehension'
   | 'TupleLiteral'
   | 'PipeExpr'
   | 'BlockExpr'
@@ -25,6 +27,10 @@ export type NodeType =
   | 'AwaitExpr'
   | 'ImportStmt'
   | 'TypeDecl'
+  | 'ForExpr'
+  | 'WhileExpr'
+  | 'BreakExpr'
+  | 'ContinueExpr'
   | 'Pattern'
   | 'Guard'
   | 'Param'
@@ -49,6 +55,21 @@ export interface NumberLiteral extends Node {
 export interface StringLiteral extends Node {
   type: 'StringLiteral';
   value: string;
+}
+
+export interface StringInterpolation extends Node {
+  type: 'StringInterpolation';
+  parts: (StringPart | ExprPart)[];
+}
+
+export interface StringPart {
+  type: 'StringPart';
+  value: string;
+}
+
+export interface ExprPart {
+  type: 'ExprPart';
+  expr: Node;
 }
 
 export interface BooleanLiteral extends Node {
@@ -165,6 +186,14 @@ export interface ListLiteral extends Node {
   elements: Node[];
 }
 
+export interface ListComprehension extends Node {
+  type: 'ListComprehension';
+  element: Node;
+  pattern: Pattern;
+  iterable: Node;
+  condition?: Node;
+}
+
 export interface TupleLiteral extends Node {
   type: 'TupleLiteral';
   elements: Node[];
@@ -189,6 +218,28 @@ export interface ReturnExpr extends Node {
 export interface AwaitExpr extends Node {
   type: 'AwaitExpr';
   expression: Node;
+}
+
+export interface ForExpr extends Node {
+  type: 'ForExpr';
+  pattern: Pattern;
+  iterable: Node;
+  condition?: Node;
+  body: Node;
+}
+
+export interface WhileExpr extends Node {
+  type: 'WhileExpr';
+  condition: Node;
+  body: Node;
+}
+
+export interface BreakExpr extends Node {
+  type: 'BreakExpr';
+}
+
+export interface ContinueExpr extends Node {
+  type: 'ContinueExpr';
 }
 
 export interface ImportStmt extends Node {

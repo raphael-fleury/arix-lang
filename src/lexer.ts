@@ -1,6 +1,7 @@
 export type TokenType =
   | 'NUMBER'
   | 'STRING'
+  | 'INTERPOLATED_STRING'
   | 'IDENTIFIER'
   | 'KEYWORD'
   | 'OPERATOR'
@@ -183,6 +184,9 @@ export function tokenize(source: string): Token[] {
       } else {
         pos++;
         let value = '';
+        let hasInterpolation = false;
+        const stringStart = pos;
+        
         while (pos < source.length) {
           if (source[pos] === '\\' && pos + 1 < source.length) {
             // Handle escape sequence
@@ -190,6 +194,9 @@ export function tokenize(source: string): Token[] {
             value += source[pos + 1];
             pos += 2;
             column += 2;
+          } else if (source[pos] === '$' && source[pos + 1] === '{') {
+            hasInterpolation = true;
+            break;
           } else if (source[pos] === '"') {
             break;
           } else {
@@ -211,8 +218,25 @@ export function tokenize(source: string): Token[] {
           break;
         }
         
-        tokens.push({ type: 'STRING', value: processEscapeSequences(value), line, column });
-        pos++;
+        // If has interpolation, return raw string for parser to handle
+        if (hasInterpolation) {
+          // Reset to start of string content and read entire raw string
+          pos = stringStart;
+          value = '';
+          while (pos < source.length && source[pos] !== '"') {
+            value += source[pos];
+            pos++;
+            column++;
+          }
+          tokens.push({ type: 'INTERPOLATED_STRING', value, line, column: stringStartCol });
+        } else {
+          tokens.push({ type: 'STRING', value: processEscapeSequences(value), line, column });
+        }
+        
+        if (source[pos] === '"') {
+          pos++;
+          column++;
+        }
       }
       continue;
     }

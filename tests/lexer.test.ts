@@ -236,4 +236,62 @@ describe('Lexer', () => {
     expect(errors[0].line).toBe(2);
     expect(errors[0].column).toBe(3);
   });
+
+  it('tokenizes regular strings as STRING type', () => {
+    const tokens = tokenize('"hello world"');
+    expect(tokens[0].type).toBe('STRING');
+    expect(tokens[0].value).toBe('hello world');
+  });
+
+  it('tokenizes interpolated strings as INTERPOLATED_STRING type', () => {
+    const tokens = tokenize('"Hello ${name}"');
+    expect(tokens[0].type).toBe('INTERPOLATED_STRING');
+    expect(tokens[0].value).toBe('Hello ${name}');
+  });
+
+  it('tokenizes strings with multiple interpolations', () => {
+    const tokens = tokenize('"${x} + ${y} = ${result}"');
+    expect(tokens[0].type).toBe('INTERPOLATED_STRING');
+    expect(tokens[0].value).toBe('${x} + ${y} = ${result}');
+  });
+
+  it('preserves raw content of interpolated strings', () => {
+    const testCases = [
+      '"Start ${a} middle ${b} end"',
+      '"${func()}"',
+      '"${obj.prop.method()}"',
+      '"${a ? b : c}"',
+    ];
+
+    for (const code of testCases) {
+      const tokens = tokenize(code);
+      const strToken = tokens.find(t => t.type === 'INTERPOLATED_STRING' || t.type === 'STRING');
+      expect(strToken).toBeDefined();
+      // Raw content should match input minus quotes
+      expect(strToken!.value).toBe(code.slice(1, -1));
+    }
+  });
+
+  it('tokenizes interpolated string with escaped dollar sign', () => {
+    const tokens = tokenize('"Price: \\$${amount}"');
+    // Should have INTERPOLATED_STRING since there's ${...}
+    const strToken = tokens.find(t => t.type === 'INTERPOLATED_STRING');
+    expect(strToken).toBeDefined();
+    expect(strToken!.value).toContain('\\$');
+  });
+
+  it('distinguishes between STRING and INTERPOLATED_STRING', () => {
+    const regular = tokenize('"just a string"');
+    const interpolated = tokenize('"string with ${expr}"');
+
+    expect(regular[0].type).toBe('STRING');
+    expect(interpolated[0].type).toBe('INTERPOLATED_STRING');
+  });
+
+  it('tokenizes INTERPOLATED_STRING after INDENT', () => {
+    const tokens = tokenize('fn main()\n  x = "Hello ${world}"');
+    const interpolated = tokens.find(t => t.type === 'INTERPOLATED_STRING');
+    expect(interpolated).toBeDefined();
+    expect(interpolated!.value).toBe('Hello ${world}');
+  });
 });
