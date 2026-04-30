@@ -98,6 +98,52 @@ describe('Parser', () => {
     expect(letDecl.value.left.type).toBe('PipeExpr');
   });
 
+  it('parses for loops - simple iteration', () => {
+    const ast = parse('for x in [1, 2, 3]:\n    print(x)');
+    expect(ast.body[0].type).toBe('ForExpr');
+  });
+
+  it('parses for loops with pattern matching', () => {
+    const ast = parse('for Ok(value) in results:\n    print(value)');
+    expect(ast.body[0].type).toBe('ForExpr');
+  });
+
+  it('parses for loops with destructuring', () => {
+    const ast = parse('for (x, y) in pairs:\n    print("x")');
+    expect(ast.body[0].type).toBe('ForExpr');
+  });
+
+  it('parses for loops with filtering', () => {
+    const ast = parse('for x in nums if x > 0:\n    print(x)');
+    expect(ast.body[0].type).toBe('ForExpr');
+  });
+
+  it('parses while loops', () => {
+    const ast = parse('let mut counter = 0\nwhile counter < 5:\n    counter = counter + 1');
+    const whileStmt = ast.body[1] as any;
+    expect(whileStmt.type).toBe('WhileExpr');
+  });
+
+  it('parses break statements in for loops', () => {
+    const src = [
+      'for x in [1, 2, 3, 4, 5]:',
+      '    if x == 3:',
+      '        break',
+    ].join('\n');
+    const ast = parse(src);
+    expect(ast.body[0].type).toBe('ForExpr');
+  });
+
+  it('parses continue statements in for loops', () => {
+    const src = [
+      'for x in [1, 2, 3, 4, 5]:',
+      '    if x == 2:',
+      '        continue',
+    ].join('\n');
+    const ast = parse(src);
+    expect(ast.body[0].type).toBe('ForExpr');
+  });
+
   it('parses list comprehensions - simple', () => {
     const ast = parse('[x for x in nums]');
     expect(ast.body[0].type).toBe('ListComprehension');

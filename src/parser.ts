@@ -28,6 +28,10 @@ import type {
   AwaitExpr,
   ImportStmt,
   TypeDecl,
+  ForExpr,
+  WhileExpr,
+  BreakExpr,
+  ContinueExpr,
   Param,
   Pattern,
   Guard,
@@ -100,6 +104,14 @@ class Parser {
         case 'public':
         case 'internal':
           return this.parseVisibilityStatement();
+        case 'for':
+          return this.parseFor();
+        case 'while':
+          return this.parseWhile();
+        case 'break':
+          return this.parseBreak();
+        case 'continue':
+          return this.parseContinue();
       }
     }
 
@@ -207,11 +219,12 @@ class Parser {
         break;
       }
       
-      // Let declarations inside blocks are allowed
-      if (this.current().value === 'let') {
-        body.push(this.parseLetDecl());
-      } else if (this.current().type !== 'EOF' && this.current().type !== 'DEDENT') {
-        body.push(this.parseExpr());
+      // Use parseStatement() to handle let, for, while, break, continue, etc.
+      if (this.current().type !== 'EOF' && this.current().type !== 'DEDENT') {
+        const stmt = this.parseStatement();
+        if (stmt !== null) {
+          body.push(stmt);
+        }
       }
       
       this.skipNewlines();
@@ -754,15 +767,42 @@ class Parser {
     this.advance(); // consume 'if'
     const condition = this.parseExpr();
     this.skipNewlines();
-    this.expect('KEYWORD', 'then');
-    this.skipNewlines();
-    const thenBranch = this.parseExpr();
-    this.skipNewlines();
-    this.expect('KEYWORD', 'else');
-    this.skipNewlines();
-    const elseBranch = this.parseExpr();
+    
+    // Check if this is a statement-style if (with :) or expression-style if (with then)
+    if (this.current().value === ':') {
+      // Statement-style if: if condition: body else: else_body
+      this.advance(); // consume ':'
+      this.skipNewlines();
+      const thenBranch = this.parseBlockBody();
+      
+      // Check for else clause
+      let elseBranch: Node = { type: 'BlockExpr', body: [] } as BlockExpr;
+      if (this.current().value === 'else') {
+        this.advance(); // consume 'else'
+        this.skipNewlines();
+        if (this.current().value === ':') {
+          this.advance(); // consume ':'
+          this.skipNewlines();
+          elseBranch = this.parseBlockBody();
+        } else {
+          // else if case
+          elseBranch = this.parseIf();
+        }
+      }
+      
+      return { type: 'IfExpr', condition, thenBranch, elseBranch };
+    } else {
+      // Expression-style if: if condition then expr else expr
+      this.expect('KEYWORD', 'then');
+      this.skipNewlines();
+      const thenBranch = this.parseExpr();
+      this.skipNewlines();
+      this.expect('KEYWORD', 'else');
+      this.skipNewlines();
+      const elseBranch = this.parseExpr();
 
-    return { type: 'IfExpr', condition, thenBranch, elseBranch };
+      return { type: 'IfExpr', condition, thenBranch, elseBranch };
+    }
   }
 
   private parseMatch(): MatchExpr {
@@ -822,6 +862,59 @@ class Parser {
     }
 
     return { type: 'MatchExpr', value, arms };
+  }
+
+  private parseFor(): ForExpr {
+    this.advance(); // consume 'for'
+    const pattern = this.parsePattern();
+    this.expect('KEYWORD', 'in');
+    const iterable = this.parseExpr();
+    
+    let condition: Node | undefined;
+    if (this.current().value === 'if') {
+      this.advance();
+      condition = this.parseExpr();
+    }
+    
+    this.skipNewlines();
+    this.expect('PUNCTUATION', ':');
+    this.skipNewlines();
+    
+    const body = this.parseBlockBody();
+    
+    return {
+      type: 'ForExpr',
+      pattern,
+      iterable,
+      condition,
+      body,
+    } as ForExpr;
+  }
+
+  private parseWhile(): WhileExpr {
+    this.advance(); // consume 'while'
+    const condition = this.parseExpr();
+    this.skipNewlines();
+    this.expect('PUNCTUATION', ':');
+    this.skipNewlines();
+    
+    const body = this.parseBlockBody();
+    
+    return {
+      type: 'WhileExpr',
+      condition,
+      body,
+    } as WhileExpr;
+  }
+
+  private parseBreak(): BreakExpr {
+    this.advance(); // consume 'break'
+    return { type: 'BreakExpr' } as BreakExpr;
+  }
+
+  private parseContinue(): ContinueExpr {
+    this.advance(); // consume 'continue'
+    return { type: 'ContinueExpr' } as ContinueExpr;
   }
 
   private parseListLiteral(): Node {
