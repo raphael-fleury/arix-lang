@@ -775,7 +775,7 @@ class Parser {
       const right = this.parsePrimary();
       return { 
         type: 'FunctionExpr', 
-        params: [{ type: 'Param', name: '_left', paramType: undefined }],
+        params: [{ name: '_left', paramType: undefined }],
         body: { type: 'BinaryExpr', operator, left: { type: 'Identifier', name: '_left' }, right }
       } as FunctionExpr;
     }
@@ -783,7 +783,7 @@ class Parser {
     this.pos = savedPos;
     return { 
       type: 'FunctionExpr', 
-      params: [{ type: 'Param', name: '_left', paramType: undefined }, { type: 'Param', name: '_right', paramType: undefined }],
+      params: [{ name: '_left', paramType: undefined }, { name: '_right', paramType: undefined }],
       body: { type: 'BinaryExpr', operator, left: { type: 'Identifier', name: '_left' }, right: { type: 'Identifier', name: '_right' } }
     } as FunctionExpr;
   }
@@ -1124,6 +1124,40 @@ class Parser {
       return { type: 'TupleLiteral', elements: [] } as TupleLiteral;
     }
 
+    // Check for operator section: (op), (op arg), (arg op)
+    if (this.current().type === 'OPERATOR') {
+      return this.parseOperatorSection();
+    }
+
+    // Try to parse as left-argument operator section first
+    // Check pattern: expr op ) by looking ahead
+    const savedPos = this.pos;
+    try {
+      const first = this.parsePrimary(); // Parse just the primary, not full expr
+      
+      if (this.current().type === 'OPERATOR' && this.peek(1).value === ')') {
+        // This is (expr op) pattern
+        const operator = this.current().value;
+        this.advance();
+        this.expect('PUNCTUATION', ')');
+        
+        const param: Param = { name: '_x', paramType: undefined };
+        const body: BinaryExpr = {
+          type: 'BinaryExpr',
+          left: first,
+          operator,
+          right: { type: 'Identifier', name: '_x' } as Identifier
+        };
+        return { type: 'FunctionExpr', params: [param], body } as FunctionExpr;
+      }
+      
+      // Reset and parse as normal expression
+      this.pos = savedPos;
+    } catch (e) {
+      // Reset on error
+      this.pos = savedPos;
+    }
+
     const first = this.parseExpr();
 
     if (this.current().value === ',') {
@@ -1139,6 +1173,41 @@ class Parser {
 
     this.expect('PUNCTUATION', ')');
     return first;
+  }
+
+  private parseOperatorSection(): Node {
+    // We're already past '(' and at an OPERATOR token
+    const operator = this.current().value;
+    this.advance();
+
+    if (this.current().value === ')') {
+      // Binary operator: (+), (-), etc.
+      this.advance();
+      const params: Param[] = [
+        { name: '_a', paramType: undefined },
+        { name: '_b', paramType: undefined }
+      ];
+      const body: BinaryExpr = {
+        type: 'BinaryExpr',
+        left: { type: 'Identifier', name: '_a' } as Identifier,
+        operator,
+        right: { type: 'Identifier', name: '_b' } as Identifier
+      };
+      return { type: 'FunctionExpr', params, body } as FunctionExpr;
+    }
+
+    // Unary operator with right argument: (* 2), (> 0), etc.
+    const right = this.parsePrimary();
+    this.expect('PUNCTUATION', ')');
+
+    const param: Param = { name: '_x', paramType: undefined };
+    const body: BinaryExpr = {
+      type: 'BinaryExpr',
+      left: { type: 'Identifier', name: '_x' } as Identifier,
+      operator,
+      right
+    };
+    return { type: 'FunctionExpr', params: [param], body } as FunctionExpr;
   }
 
   private parseType(): Node {

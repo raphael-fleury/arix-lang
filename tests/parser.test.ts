@@ -208,4 +208,56 @@ describe('Parser', () => {
     expect(interp.parts[1].type).toBe('ExprPart');
     expect(interp.parts[1].expr.type).toBe('CallExpr');
   });
+
+  it('parses operator section - binary operator', () => {
+    const ast = parse('(+)');
+    expect(ast.body[0].type).toBe('FunctionExpr');
+    const fn = ast.body[0] as any;
+    expect(fn.params.length).toBe(2);
+    expect(fn.body.type).toBe('BinaryExpr');
+    expect(fn.body.operator).toBe('+');
+  });
+
+  it('parses operator section - unary with right argument', () => {
+    const ast = parse('(* 2)');
+    expect(ast.body[0].type).toBe('FunctionExpr');
+    const fn = ast.body[0] as any;
+    expect(fn.params.length).toBe(1);
+    expect(fn.body.type).toBe('BinaryExpr');
+    expect(fn.body.operator).toBe('*');
+    expect(fn.body.right.type).toBe('NumberLiteral');
+    expect(fn.body.right.value).toBe(2);
+  });
+
+  it('parses operator section - unary with left argument', () => {
+    const ast = parse('(3 >)');
+    expect(ast.body[0].type).toBe('FunctionExpr');
+    const fn = ast.body[0] as any;
+    expect(fn.params.length).toBe(1);
+    expect(fn.body.type).toBe('BinaryExpr');
+    expect(fn.body.operator).toBe('>');
+    expect(fn.body.left.type).toBe('NumberLiteral');
+    expect(fn.body.left.value).toBe(3);
+  });
+
+  it('parses operator section - comparison operator', () => {
+    const ast = parse('(> 0)');
+    expect(ast.body[0].type).toBe('FunctionExpr');
+    const fn = ast.body[0] as any;
+    expect(fn.params.length).toBe(1);
+    expect(fn.body.type).toBe('BinaryExpr');
+    expect(fn.body.operator).toBe('>');
+    expect(fn.body.right.type).toBe('NumberLiteral');
+    expect(fn.body.right.value).toBe(0);
+  });
+
+  it('parses operator section - string concatenation', () => {
+    const ast = parse('(++ "!")');
+    expect(ast.body[0].type).toBe('FunctionExpr');
+    const fn = ast.body[0] as any;
+    expect(fn.params.length).toBe(1);
+    expect(fn.body.type).toBe('BinaryExpr');
+    expect(fn.body.operator).toBe('++');
+    expect(fn.body.right.type).toBe('StringLiteral');
+  });
 });
