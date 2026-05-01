@@ -35,11 +35,10 @@ import type {
   ListComprehension,
   StringInterpolation,
 } from './ast.js';
-import { relative, dirname } from 'path';
 
 // Runtime import will be generated dynamically based on output location
 const RUNTIME_IMPORT = (relativePath: string) => 
-  `import { List, Result, Option, print } from '${relativePath}';`;
+  `import { List, Result, Maybe, print } from '${relativePath}';`;
 
 export class Transpiler {
   private output = '';
@@ -302,15 +301,15 @@ export class Transpiler {
 
   private transpileImportStmt(node: ImportStmt): void {
     // Stdlib modules - handled by runtime
-    const stdlibModules = ['result', 'option', 'list'];
+    const stdlibModules = ['result', 'maybe', 'list'];
     if (stdlibModules.includes(node.module.toLowerCase())) {
       this.needsRuntime = true;
       if (node.module.toLowerCase() === 'result') {
         this.constructors.set('Ok', 'Result.Ok');
         this.constructors.set('Err', 'Result.Err');
-      } else if (node.module.toLowerCase() === 'option') {
-        this.constructors.set('Some', 'Option.Some');
-        this.constructors.set('None', 'Option.None');
+      } else if (node.module.toLowerCase() === 'maybe') {
+        this.constructors.set('Just', 'Maybe.Just');
+        this.constructors.set('Nothing', 'Maybe.Nothing');
       } else if (node.module.toLowerCase() === 'list') {
         this.constructors.set('Cons', 'List.cons');
         this.constructors.set('Nil', 'List.nil');
@@ -319,7 +318,7 @@ export class Transpiler {
     }
 
     // Local modules - generate ESM import
-    this.needsRuntime = true; // Runtime is always needed for print, Result, Option, List
+    this.needsRuntime = true; // Runtime is always needed for print, Result, Maybe, List
     
     const jsPath = this.moduleToJsPath(node.module, node.isRelative);
     
