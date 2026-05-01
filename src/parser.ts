@@ -641,6 +641,10 @@ class Parser {
         const index = this.parseExpr();
         this.expect('PUNCTUATION', ']');
         expr = { type: 'IndexExpr', object: expr, index } as IndexExpr;
+      } else if (this.current().value === '!!') {
+        this.advance();
+        const index = this.parsePrimary();
+        expr = { type: 'IndexExpr', object: expr, index } as IndexExpr;
       } else {
         break;
       }
