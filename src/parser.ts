@@ -779,7 +779,7 @@ class Parser {
       const right = this.parsePrimary();
       return { 
         type: 'FunctionExpr', 
-        params: [{ name: '_left', paramType: undefined }],
+        params: [{ type: 'Param', name: '_left', paramType: undefined }],
         body: { type: 'BinaryExpr', operator, left: { type: 'Identifier', name: '_left' }, right }
       } as FunctionExpr;
     }
@@ -787,7 +787,7 @@ class Parser {
     this.pos = savedPos;
     return { 
       type: 'FunctionExpr', 
-      params: [{ name: '_left', paramType: undefined }, { name: '_right', paramType: undefined }],
+      params: [{ type: 'Param', name: '_left', paramType: undefined }, { type: 'Param', name: '_right', paramType: undefined }],
       body: { type: 'BinaryExpr', operator, left: { type: 'Identifier', name: '_left' }, right: { type: 'Identifier', name: '_right' } }
     } as FunctionExpr;
   }
@@ -1145,7 +1145,7 @@ class Parser {
         this.advance();
         this.expect('PUNCTUATION', ')');
         
-        const param: Param = { name: '_x', paramType: undefined };
+        const param: Param = { type: 'Param', name: '_x', paramType: undefined };
         const body: BinaryExpr = {
           type: 'BinaryExpr',
           left: first,
@@ -1188,8 +1188,8 @@ class Parser {
       // Binary operator: (+), (-), etc.
       this.advance();
       const params: Param[] = [
-        { name: '_a', paramType: undefined },
-        { name: '_b', paramType: undefined }
+        { type: 'Param', name: '_a', paramType: undefined },
+        { type: 'Param', name: '_b', paramType: undefined }
       ];
       const body: BinaryExpr = {
         type: 'BinaryExpr',
@@ -1204,7 +1204,7 @@ class Parser {
     const right = this.parsePrimary();
     this.expect('PUNCTUATION', ')');
 
-    const param: Param = { name: '_x', paramType: undefined };
+    const param: Param = { type: 'Param', name: '_x', paramType: undefined };
     const body: BinaryExpr = {
       type: 'BinaryExpr',
       left: { type: 'Identifier', name: '_x' } as Identifier,
