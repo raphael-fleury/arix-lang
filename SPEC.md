@@ -20,7 +20,7 @@
 - Comments: `# single line`, `""" multi-line """`
 
 ### 2.2 Nomenclature
-- **Types**: PascalCase (`User`, `Option`, `Result`)
+- **Types**: PascalCase (`User`, `Maybe`, `Result`)
 - **Functions/Variables**: camelCase (`getUser`, `isValid`, `userName`)
 - **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRIES`)
 - **Files**: kebab-case (`user-service.purl`, `my-utils.purl`)
@@ -35,16 +35,9 @@
 
 ### 3.2 Generic Types
 - Syntax: parentheses `(a, b)`
-- Examples: `Option(a)`, `Result(a, e)`, `List(a)`, `Pair(a, b)`
+- Examples: `Maybe(a)`, `Result(a, e)`, `List(a)`, `Pair(a, b)`
 
-### 3.3 Union Types
-```python
-type Shape = Circle(r Float) | Rectangle(w Float, h Float)
-type Result(a, e) = Ok(a) | Err(e)
-type Option(a) = Some(a) | None
-```
-
-### 3.4 Records
+### 3.3 Records
 ```python
 type User = {
     name String,
@@ -55,7 +48,7 @@ type User = {
 user = { name: "Ana", age: 30 }
 ```
 
-### 3.5 Type Inference
+### 3.4 Type Inference
 - Strong inference for local variables and private functions
 - Type annotations **required** for public functions
 
@@ -70,9 +63,105 @@ public fn add(a Int, b Int) Int = a + b
 
 ---
 
-## 4. Variables
+## 4. Algebraic Data Types (ADTs)
 
-### 4.1 Immutability
+Purl supports **Algebraic Data Types** through a generic ADT constructor in the runtime. ADTs allow you to define custom types with multiple named variants, enabling type-safe pattern matching and functional data structures.
+
+### 4.1 Creating ADTs
+
+Use the built-in `createADT` function to define custom types:
+
+```python
+# In Purl (future syntax, currently use JavaScript)
+# type Maybe(a) = Just(a) | Nothing
+# type Result(a, e) = Ok(a) | Err(e)
+```
+
+The runtime provides ready-to-use ADTs:
+- **Maybe**: Optional values (`Just(value)`, `Nothing()`)
+- **Result**: Success/failure (`Ok(value)`, `Err(error)`)
+- **List**: Immutable linked list (`Cons(head, tail)`, `Nil()`)
+
+### 4.2 Working with Built-in ADTs
+
+#### Maybe Type
+```python
+fn getUser(id) =
+    let user = Maybe.Just({ name: "Alice", age: 30 })
+    match user:
+        Just(u) -> "Found: ${u.name}"
+        Nothing -> "User not found"
+
+# Or using utilities
+let age = user |> MaybeUtils.map(u => u.age)
+let nameOrDefault = MaybeUtils.getOrElse(user, { name: "Unknown" })
+```
+
+#### Result Type
+```python
+fn divide(a, b) =
+    if b == 0:
+        Result.Err("Division by zero")
+    else:
+        Result.Ok(a / b)
+
+fn main() =
+    let result = divide(10, 2)
+    match result:
+        Ok(value) -> "Result: ${value}"
+        Err(error) -> "Error: ${error}"
+```
+
+### 4.3 Custom ADTs
+
+Define custom algebraic data types for your domain:
+
+```python
+# Domain model for user status
+type UserStatus = Active | Inactive | Banned
+
+# With associated data
+type UserStatus = 
+    | Active(userId, lastLogin)
+    | Inactive(userId, reason)
+    | Banned(userId)
+
+fn checkStatus(user) =
+    match user.status:
+        Active(id, login) -> "Active since ${login}"
+        Inactive(id, reason) -> "Inactive: ${reason}"
+        Banned(id) -> "Banned"
+```
+
+### 4.4 Tree Example (Nested ADTs)
+
+```python
+# Binary tree
+type Tree = 
+    | Node(value, left, right)
+    | Empty
+
+fn sumTree(node) =
+    match node:
+        Node(v, left, right) -> v + sumTree(left) + sumTree(right)
+        Empty -> 0
+
+let tree = Node(5, Node(3, Empty, Empty), Node(7, Empty, Empty))
+let total = sumTree(tree)  # 5 + 3 + 7 = 15
+```
+
+### 4.5 ADT Benefits
+
+✓ **Type Safety**: Exhaustive pattern matching ensures all cases are handled
+✓ **Composability**: Nest ADTs for complex data structures
+✓ **Functional**: Immutable by default, perfect for functional programming
+✓ **Expressive**: Models domain logic directly in types
+
+---
+
+## 5. Variables
+
+### 5.1 Immutability
 ```python
 let x = 10
 # x = 20  # Error!
@@ -81,7 +170,7 @@ let mut counter = 0
 counter = counter + 1  # OK
 ```
 
-### 4.2 Destructuring
+### 5.2 Destructuring
 ```python
 let { name, age } = user
 let { name as userName } = user
@@ -94,9 +183,9 @@ let [first, second | rest] = [1, 2, 3]
 
 ---
 
-## 5. Functions
+## 6. Functions
 
-### 5.1 Definition
+### 6.1 Definition
 ```python
 fn add(a, b) = a + b
 fn greet(name) = "Hello, ${name}!"
@@ -105,7 +194,7 @@ fn greet(name) = "Hello, ${name}!"
 fn add(a Int, b Int) Int = a + b
 ```
 
-### 5.2 Currying (Optional)
+### 6.2 Currying (Optional)
 ```python
 # All equivalent:
 add(1, 2)      # Direct
@@ -113,7 +202,7 @@ add(1)(2)      # Curried
 let addOne = add(1)  # Partial application
 ```
 
-### 5.3 Async Functions
+### 6.3 Async Functions
 ```python
 async fn fetchUser(id Int) Result(User, String) =
     let response = await http.get("/api/users/${id}")
@@ -123,7 +212,7 @@ async fn fetchUser(id Int) Result(User, String) =
         Err(e) -> Err(e.message)
 ```
 
-### 5.4 Section Operators
+### 6.4 Section Operators
 ```python
 (* 2)     # x => x * 2
 (> 3)     # x => x > 3
@@ -133,7 +222,7 @@ async fn fetchUser(id Int) Result(User, String) =
 (+)       # (a, b) => a + b
 ```
 
-### 5.5 Pipe Operator
+### 6.5 Pipe Operator
 ```python
 numbers
     |> map(* 2)
@@ -143,9 +232,9 @@ numbers
 
 ---
 
-## 6. Pattern Matching
+## 7. Pattern Matching
 
-### 6.1 Basic Match
+### 7.1 Basic Match
 ```python
 result = match value:
     0 -> "zero"
@@ -153,7 +242,7 @@ result = match value:
     _ -> "negative"
 ```
 
-### 6.2 Pattern Guards
+### 7.2 Pattern Guards
 ```python
 match user:
     { age } when age >= 18 -> "adult"
@@ -161,7 +250,7 @@ match user:
     _ -> "minor"
 ```
 
-### 6.3 Match Contexts
+### 7.3 Match Contexts
 - Expression: `let x = match ...`
 - Function return: `fn f() = match ...`
 - Let binding: `let Ok(v) = result`
@@ -171,9 +260,9 @@ match user:
 
 ---
 
-## 7. Data Structures
+## 8. Data Structures
 
-### 7.1 Lists
+### 8.1 Lists
 ```python
 let nums = [10, 20, 30]
 
@@ -191,10 +280,10 @@ length nums              # Int => 3
 isEmpty nums             # Bool => False
 ```
 
-### 7.2 Options and Results
+### 8.2 Maybe and Results
 ```python
-# Option
-type Option(a) = Some(a) | None
+# Maybe
+type Maybe(a) = Just(a) | Nothing
 
 let age = findAge(userId) ?? 0
 
@@ -206,7 +295,7 @@ match parseInt(input):
     Err(e) -> 0
 ```
 
-### 7.3 Tuples
+### 8.3 Tuples
 ```python
 let pair = (1, "one")
 let (num, str) = pair
@@ -214,9 +303,9 @@ let (num, str) = pair
 
 ---
 
-## 8. Loops
+## 9. Loops
 
-### 8.1 For Loops
+### 9.1 For Loops
 
 For loops iterate over iterables with pattern matching support.
 
@@ -249,7 +338,7 @@ print(sum)  # 6
 print(x) # Error: "x" only exists inside the loop
 ```
 
-### 8.2 While Loops
+### 9.2 While Loops
 
 While loops repeat while a condition is true.
 
@@ -296,15 +385,15 @@ for x in [1, 2, 3, 4, 5]:
 
 ---
 
-## 9. Modules and Imports
+## 10. Modules and Imports
 
 Purl uses ES Modules (ESM) for JavaScript interoperability. Each `.purl` file is a module.
 
-### 9.1 File Naming Convention
+### 10.1 File Naming Convention
 - Files use **kebab-case**: `user-service.purl`, `my-utils.purl`
 - Module name derives from filename: `user-service.purl` → `user-service`
 
-### 9.2 Import Syntax
+### 10.2 Import Syntax
 ```python
 # Local module (searches in src/ and project root)
 import user-service
@@ -324,14 +413,14 @@ import option
 import list
 ```
 
-### 9.3 Module Resolution
+### 10.3 Module Resolution
 ```
 1. Relative imports (./foo, ../foo) → ./foo.purl
 2. Named imports (foo-bar) → {src,root}/foo-bar.purl
 3. Stdlib (result, option, list) → built-in runtime
 ```
 
-### 9.4 Visibility
+### 10.4 Visibility
 ```python
 # Private (default) - file only
 fn helper() = ...
@@ -343,7 +432,7 @@ fn helper() = ...
 public fn publicFunc() = ...
 ```
 
-### 9.5 Compilation
+### 10.5 Compilation
 ```bash
 # Compile single file (resolves and compiles dependencies)
 purl build src/main.purl -o dist/
@@ -358,7 +447,7 @@ dist/
 └── helper-utils.js
 ```
 
-### 9.6 Example Project Structure
+### 10.6 Example Project Structure
 ```
 project/
 ├── src/
@@ -373,23 +462,23 @@ project/
 
 ---
 
-## 10. Error Handling
+## 11. Error Handling
 
-### 10.1 Option Type
+### 11.1 Option Type
 ```python
 type Option(a) = Some(a) | None
 
 fn findUser(id Int) Option(User) = ...
 ```
 
-### 10.2 Result Type
+### 11.2 Result Type
 ```python
 type Result(a, e) = Ok(a) | Err(e)
 
 fn parseInt(s String) Result(Int, String) = ...
 ```
 
-### 10.3 Async Error Handling
+### 11.3 Async Error Handling
 ```python
 async fn fetchUser(id Int) Result(User, String) =
     try await http.get("/api/users/${id}")
@@ -399,9 +488,9 @@ async fn fetchUser(id Int) Result(User, String) =
 
 ---
 
-## 11. Documentation
+## 12. Documentation
 
-### 11.1 Docstrings
+### 12.1 Docstrings
 ```python
 """
 Calculates the area of a shape.
@@ -410,7 +499,7 @@ Returns the value in square units.
 fn area(shape Shape) Float = ...
 ```
 
-### 11.2 Type Annotations
+### 12.2 Type Annotations
 ```python
 public fn fetchUser
     """Fetches a user by ID.
@@ -425,7 +514,7 @@ public fn fetchUser
 
 ---
 
-## 12. Reserved Keywords
+## 13. Reserved Keywords
 ```
 fn, let, let mut, if, else, match, when, import, type,
 public, internal, async, await, try, catch, throw,
@@ -435,16 +524,16 @@ true, false, None, Ok, Err, Some, module, where, use
 
 ---
 
-## 13. Examples
+## 14. Examples
 
-### 13.1 Hello World
+### 14.1 Hello World
 ```python
 fn main() =
     let name = "World"
     print("Hello, ${name}!")
 ```
 
-### 13.2 Functional Pipeline
+### 14.2 Functional Pipeline
 ```python
 fn processNumbers(nums List(Int)) Int =
     nums
