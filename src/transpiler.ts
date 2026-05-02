@@ -38,7 +38,7 @@ import type {
 
 // Runtime import will be generated dynamically based on output location
 const RUNTIME_IMPORT = (relativePath: string) => 
-  `import { List, Result, Maybe, print } from '${relativePath}';`;
+  `import { List, Result, Maybe, print, createADT } from '${relativePath}';`;
 
 export class Transpiler {
   private output = '';
@@ -55,6 +55,7 @@ export class Transpiler {
   private needsRuntime = false;
   private outputDir: string = '';
   private autoRunMain = false;
+  private variantFieldNames: Map<string, string[]> = new Map();
 
   setOutputDir(dir: string): void {
     this.outputDir = dir;
@@ -275,14 +276,23 @@ export class Transpiler {
       }).join(', ');
       this.writeln(`const ${node.name} = { ${fields} };`);
     } else {
-      const typeParams = node.typeParams?.join(', ') || '';
-      this.writeln(`const ${node.name} = {};`);
+      // Use createADT for union types (ADTs)
+      this.needsRuntime = true;
+      
+      const variants: Record<string, string[]> = {};
       for (const variant of node.variants) {
-        const fields = variant.fields.map(f => f.name).join(', ');
-        const fullName = `${node.name}.${variant.name}`;
-        this.constructors.set(variant.name, fullName);
-        this.writeln(`${fullName} = ${fields !== '' ? `(${fields})` : '()'} => ({ type: '${variant.name}', ${fields} });`);
+        const fieldNames = variant.fields.map(f => f.name);
+        variants[variant.name] = fieldNames;
+        this.constructors.set(variant.name, `${node.name}.${variant.name}`);
+        // Register field names for pattern matching
+        this.variantFieldNames.set(variant.name, fieldNames);
       }
+      
+      const variantsStr = JSON.stringify(variants)
+        .replace(/"/g, "'")
+        .replace(/'([^']+)':/g, '$1:');
+      
+      this.writeln(`const ${node.name} = createADT('${node.name}', ${variantsStr});`);
     }
     this.writeln();
   }
@@ -721,7 +731,8 @@ export class Transpiler {
         return { bindings: binds.join(' '), condition: conds.join(' && '), refs: refs.join(' ') };
       }
       case 'ConstructorPattern': {
-        const conds = [`${value}.type === '${pattern.name}'`];
+        // Always use _variant for ADT pattern matching (built-in and custom)
+        const conds = [`${value}._variant === '${pattern.name}'`];
         const binds: string[] = [];
         const refs: string[] = [];
         const fieldNames = this.getVariantFieldNames(pattern.name);
@@ -758,12 +769,21 @@ export class Transpiler {
   }
 
   private getVariantFieldNames(typeName: string): string[] {
+    // Check if this is a custom ADT variant first
+    if (this.variantFieldNames.has(typeName)) {
+      return this.variantFieldNames.get(typeName) || [];
+    }
+    
     const fieldMap: Record<string, string[]> = {
       'Circle': ['r'],
       'Rectangle': ['width', 'height'],
       'Ok': ['value'],
       'Err': ['error'],
       'Some': ['value'],
+      'Just': ['value'],
+      'Nothing': [],
+      'Cons': ['head', 'tail'],
+      'Nil': [],
     };
     return fieldMap[typeName] || [];
   }

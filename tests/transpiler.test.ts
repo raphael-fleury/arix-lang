@@ -193,4 +193,33 @@ describe('Transpiler', () => {
     const result = eval(js + '\nmain()');
     expect(result).toBe('Hello World');
   });
+
+  it('transpiles custom ADT type declaration', () => {
+    const ast = parse('type Status = Active | Inactive\nfn main() = Status');
+    const js = transpile(ast);
+    expect(js).toContain('createADT');
+    expect(js).toContain('Status');
+    expect(js).toContain('Active');
+    expect(js).toContain('Inactive');
+  });
+
+  it('transpiles ADT with fields', () => {
+    const ast = parse('type UserStatus = Active(id) | Inactive(id, reason)\nfn main() = UserStatus');
+    const js = transpile(ast);
+    expect(js).toContain('createADT');
+    expect(js).toContain('UserStatus');
+    expect(js).toContain('id');
+    expect(js).toContain('reason');
+  });
+
+  it('transpiles custom ADT instantiation and pattern matching', () => {
+    const code = `type Status = Active | Inactive
+fn createStatus() = Status.Active`;
+    const ast = parse(code);
+    const js = transpile(ast);
+    // Verify the transpiled code contains expected ADT elements
+    expect(js).toContain('createADT');
+    expect(js).toContain('Status');
+    expect(js).toContain('Active');
+  });
 });

@@ -456,7 +456,13 @@ class Parser {
             this.advance();
             while (this.current().value !== ')') {
               const fieldName = this.current().type === 'IDENTIFIER' ? this.expect('IDENTIFIER').value : '';
-              const fieldType = this.parseType();
+              let fieldType: Node = { type: 'Identifier', name: 'any' } as Identifier;
+              
+              // Only parse type if we're not at the closing paren or comma
+              if (this.current().value !== ')' && this.current().value !== ',') {
+                fieldType = this.parseType();
+              }
+              
               fields.push({ name: fieldName, fieldType });
               if (this.current().value === ',') this.advance();
             }
