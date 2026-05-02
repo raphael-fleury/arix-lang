@@ -1,5 +1,5 @@
 /**
- * Purl Runtime
+ * Arix Runtime
  * Generic ADT (Algebraic Data Type) constructor and utilities
  */
 

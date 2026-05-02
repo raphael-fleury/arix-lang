@@ -1,8 +1,8 @@
-# Purl - Functional-First Programming Language
+# Arix - Functional-First Programming Language
 
 ## 1. Overview
 
-**Purl** is a functional-first programming language designed with a low learning curve for OOP and imperative developers. It compiles to JavaScript/WASM.
+**Arix** is a functional-first programming language designed with a low learning curve for OOP and imperative developers. It compiles to JavaScript/WASM.
 
 ### Design Goals
 - Low barrier to entry for OOP developers
@@ -23,7 +23,7 @@
 - **Types**: PascalCase (`User`, `Maybe`, `Result`)
 - **Functions/Variables**: camelCase (`getUser`, `isValid`, `userName`)
 - **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRIES`)
-- **Files**: kebab-case (`user-service.purl`, `my-utils.purl`)
+- **Files**: kebab-case (`user-service.arix`, `my-utils.arix`)
 
 ---
 
@@ -65,14 +65,14 @@ public fn add(a Int, b Int) Int = a + b
 
 ## 4. Algebraic Data Types (ADTs)
 
-Purl supports **Algebraic Data Types** through a generic ADT constructor in the runtime. ADTs allow you to define custom types with multiple named variants, enabling type-safe pattern matching and functional data structures.
+Arix supports **Algebraic Data Types** through a generic ADT constructor in the runtime. ADTs allow you to define custom types with multiple named variants, enabling type-safe pattern matching and functional data structures.
 
 ### 4.1 Creating ADTs
 
 Use the built-in `createADT` function to define custom types:
 
 ```python
-# In Purl (future syntax, currently use JavaScript)
+# In Arix (future syntax, currently use JavaScript)
 # type Maybe(a) = Just(a) | Nothing
 # type Result(a, e) = Ok(a) | Err(e)
 ```
@@ -387,11 +387,11 @@ for x in [1, 2, 3, 4, 5]:
 
 ## 10. Modules and Imports
 
-Purl uses ES Modules (ESM) for JavaScript interoperability. Each `.purl` file is a module.
+Arix uses ES Modules (ESM) for JavaScript interoperability. Each `.arix` file is a module.
 
 ### 10.1 File Naming Convention
-- Files use **kebab-case**: `user-service.purl`, `my-utils.purl`
-- Module name derives from filename: `user-service.purl` → `user-service`
+- Files use **kebab-case**: `user-service.arix`, `my-utils.arix`
+- Module name derives from filename: `user-service.arix` → `user-service`
 
 ### 10.2 Import Syntax
 ```python
@@ -415,8 +415,8 @@ import list
 
 ### 10.3 Module Resolution
 ```
-1. Relative imports (./foo, ../foo) → ./foo.purl
-2. Named imports (foo-bar) → {src,root}/foo-bar.purl
+1. Relative imports (./foo, ../foo) → ./foo.arix
+2. Named imports (foo-bar) → {src,root}/foo-bar.arix
 3. Stdlib (result, option, list) → built-in runtime
 ```
 
@@ -435,10 +435,10 @@ public fn publicFunc() = ...
 ### 10.5 Compilation
 ```bash
 # Compile single file (resolves and compiles dependencies)
-purl build src/main.purl -o dist/
+arix build src/main.arix -o dist/
 
 # Compile to single bundle
-purl build src/main.purl -o dist/bundle.js
+arix build src/main.arix -o dist/bundle.js
 
 # Output structure
 dist/
@@ -451,9 +451,9 @@ dist/
 ```
 project/
 ├── src/
-│   ├── main.purl
-│   ├── user-service.purl
-│   └── helper-utils.purl
+│   ├── main.arix
+│   ├── user-service.arix
+│   └── helper-utils.arix
 └── dist/
     ├── main.js
     ├── user-service.js
@@ -628,7 +628,7 @@ type Tuple3(a, b, c) = (a, b, c)
 
 ## Appendix C: Differences from Python
 
-| Feature | Python | Purl |
+| Feature | Python | Arix |
 |---------|--------|------|
 | Immutability | opt-in with frozen | default |
 | Currying | via libraries | built-in |

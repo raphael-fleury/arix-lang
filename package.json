@@ -1,11 +1,11 @@
 {
-  "name": "purl",
+  "name": "arix",
   "version": "1.0.0",
   "description": "Functional-first programming language that compiles to JavaScript",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "purl": "dist/cli.js"
+    "arix": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",

@@ -10,7 +10,7 @@ import { FunctionDecl, TypeDecl, ImportStmt } from './ast.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const RUNTIME_SOURCE = join(__dirname, '..', 'runtime', 'purl-runtime.js');
+const RUNTIME_SOURCE = join(__dirname, '..', 'runtime', 'arix-runtime.js');
 
 const STD_LIBS = ['result', 'option', 'list'];
 
@@ -40,7 +40,7 @@ async function main() {
       printHelp();
       break;
     default:
-      if (command.endsWith('.purl')) {
+      if (command.endsWith('.arix')) {
         await run(command);
       } else {
         console.error(`Unknown command: ${command}`);
@@ -52,31 +52,31 @@ async function main() {
 
 function printHelp() {
   console.log(`
-Purl - Functional programming language that compiles to JavaScript
+Arix - Functional programming language that compiles to JavaScript
 
 Usage:
-  purl run <file>       Compile and run a Purl file
-  purl build <file>     Compile to dist/ directory
-  purl init <name>      Create a new Purl project
-  purl <file.purl>      Compile and run (shortcut)
+  arix run <file>       Compile and run a Arix file
+  arix build <file>     Compile to dist/ directory
+  arix init <name>      Create a new Arix project
+  arix <file.arix>      Compile and run (shortcut)
 
 Examples:
-  purl run hello.purl
-  purl hello.purl
-  purl build main.purl
-  purl init my-project
+  arix run hello.arix
+  arix hello.arix
+  arix build main.arix
+  arix init my-project
 `);
 }
 
 async function run(file: string | undefined) {
   if (!file) {
     console.error('Error: No file specified');
-    console.log('Usage: purl run <file.purl>');
+    console.log('Usage: arix run <file.arix>');
     process.exit(1);
   }
 
-  if (!file.endsWith('.purl')) {
-    file += '.purl';
+  if (!file.endsWith('.arix')) {
+    file += '.arix';
   }
 
   if (!existsSync(file)) {
@@ -84,7 +84,7 @@ async function run(file: string | undefined) {
     process.exit(1);
   }
 
-  const tmpDir = join(process.cwd(), '.purl-tmp');
+  const tmpDir = join(process.cwd(), '.arix-tmp');
   if (!existsSync(tmpDir)) {
     mkdirSync(tmpDir, { recursive: true });
   }
@@ -97,7 +97,7 @@ async function run(file: string | undefined) {
       writeFileSync(outputFile, code);
     }
 
-    const jsFile = join(tmpDir, basename(file, '.purl') + '.js');
+    const jsFile = join(tmpDir, basename(file, '.arix') + '.js');
     console.log(`Running ${jsFile}...\n`);
 
     const { execSync } = await import('child_process');
@@ -112,12 +112,12 @@ async function run(file: string | undefined) {
 async function build(file: string | undefined, outputDir = 'dist') {
   if (!file) {
     console.error('Error: No file specified');
-    console.log('Usage: purl build <file.purl>');
+    console.log('Usage: arix build <file.arix>');
     process.exit(1);
   }
 
-  if (!file.endsWith('.purl')) {
-    file += '.purl';
+  if (!file.endsWith('.arix')) {
+    file += '.arix';
   }
 
   if (!existsSync(file)) {
@@ -134,7 +134,7 @@ async function build(file: string | undefined, outputDir = 'dist') {
       console.log(`  Written: ${relative(process.cwd(), outputFile)}`);
     }
 
-    console.log('\nRun with: node ' + join(outputDir, basename(file, '.purl') + '.js'));
+    console.log('\nRun with: node ' + join(outputDir, basename(file, '.arix') + '.js'));
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : error}`);
     process.exit(1);
@@ -144,7 +144,7 @@ async function build(file: string | undefined, outputDir = 'dist') {
 function initProject(name: string | undefined) {
   if (!name) {
     console.error('Error: Project name required');
-    console.log('Usage: purl init <project-name>');
+    console.log('Usage: arix init <project-name>');
     process.exit(1);
   }
 
@@ -157,29 +157,29 @@ function initProject(name: string | undefined) {
   mkdirSync(projectDir, { recursive: true });
   mkdirSync(join(projectDir, 'src'), { recursive: true });
 
-  writeFileSync(join(projectDir, 'src', 'main.purl'), `public fn main() = {
-    print("Hello, Purl!")
+  writeFileSync(join(projectDir, 'src', 'main.arix'), `public fn main() = {
+    print("Hello, Arix!")
 }
 `);
 
   writeFileSync(join(projectDir, 'README.md'), `# ${name}
 
-A Purl project.
+A Arix project.
 
 ## Run
 \`\`\`bash
-purl run src/main.purl
+arix run src/main.arix
 \`\`\`
 `);
 
   console.log(`Created project: ${name}/`);
-  console.log(`  src/main.purl`);
+  console.log(`  src/main.arix`);
   console.log(`  README.md`);
-  console.log(`\nRun: cd ${name} && purl run src/main.purl`);
+  console.log(`\nRun: cd ${name} && arix run src/main.arix`);
 }
 
-function collectModuleInfo(purlFile: string): ModuleInfo {
-  const source = readFileSync(purlFile, 'utf-8');
+function collectModuleInfo(arixFile: string): ModuleInfo {
+  const source = readFileSync(arixFile, 'utf-8');
   const ast = parse(source);
 
   const exports: string[] = [];
@@ -202,7 +202,7 @@ function collectModuleInfo(purlFile: string): ModuleInfo {
     }
   }
 
-  return { filePath: purlFile, exports, imports };
+  return { filePath: arixFile, exports, imports };
 }
 
 function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = false): Record<string, string> {
@@ -233,18 +233,18 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
 
   collectModule(entryFile);
 
-  function compileFile(purlFile: string, isMain = false): void {
-    if (compiled[purlFile]) return;
+  function compileFile(arixFile: string, isMain = false): void {
+    if (compiled[arixFile]) return;
 
-    const relFromEntry = relative(entryDir, purlFile).replace(/\\/g, '/');
+    const relFromEntry = relative(entryDir, arixFile).replace(/\\/g, '/');
     const dir = join(outputDir, dirname(relFromEntry));
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
     const outputFileDir = dir;
-    const outputFile = join(dir, purlFile.replace(/\.purl$/, '.js').replace(/\\/g, '/').split('/').pop()!);
+    const outputFile = join(dir, arixFile.replace(/\.arix$/, '.js').replace(/\\/g, '/').split('/').pop()!);
 
-    const source = readFileSync(purlFile, 'utf-8');
+    const source = readFileSync(arixFile, 'utf-8');
     if (process.env.DEBUG) console.log('Tokens:', tokenize(source));
 
     const ast = parse(source);
@@ -253,7 +253,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
 
-    const jsCode = transpiler.transpile(ast, purlFile);
+    const jsCode = transpiler.transpile(ast, arixFile);
     compiled[outputFile] = jsCode;
   }
 
@@ -262,7 +262,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
   }
 
   if (existsSync(RUNTIME_SOURCE)) {
-    const runtimeDest = join(outputDir, 'purl-runtime.js');
+    const runtimeDest = join(outputDir, 'arix-runtime.js');
     copyFileSync(RUNTIME_SOURCE, runtimeDest);
   }
 
@@ -271,7 +271,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
 
 function resolveModule(moduleName: string, fromDir: string): string | null {
   if (moduleName.startsWith('./') || moduleName.startsWith('../')) {
-    const basePath = join(fromDir, moduleName + '.purl');
+    const basePath = join(fromDir, moduleName + '.arix');
     if (existsSync(basePath)) {
       return basePath;
     }
@@ -280,7 +280,7 @@ function resolveModule(moduleName: string, fromDir: string): string | null {
   const searchPaths = [fromDir, join(fromDir, 'src'), process.cwd(), join(process.cwd(), 'src')];
 
   for (const searchDir of searchPaths) {
-    const filePath = join(searchDir, moduleName + '.purl');
+    const filePath = join(searchDir, moduleName + '.arix');
     if (existsSync(filePath)) {
       return filePath;
     }
