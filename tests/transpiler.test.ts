@@ -222,4 +222,32 @@ fn createStatus() = Status.Active`;
     expect(js).toContain('Status');
     expect(js).toContain('Active');
   });
+
+  it('transpiles function with type annotations - primitives', () => {
+    const ast = parse('fn add(a Int, b Int) -> Int = a + b\nfn main() = add(5, 3)');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(8);
+  });
+
+  it('transpiles function with type annotations - strings', () => {
+    const ast = parse('fn greet(name String) -> String = "Hello " ++ name\nfn main() = greet("World")');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe('Hello World');
+  });
+
+  it('transpiles function with generic type annotations', () => {
+    const ast = parse('fn process(nums List(Int)) -> List(Int) = [x * 2 for x in nums]\nfn main() = process([1, 2, 3])');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toEqual([2, 4, 6]);
+  });
+
+  it('transpiles multiple parameters with type annotations', () => {
+    const ast = parse('fn combine(x Int, y Int, z Int) -> Int = x + y + z\nfn main() = combine(1, 2, 3)');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(6);
+  });
 });
