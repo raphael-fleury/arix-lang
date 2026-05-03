@@ -250,4 +250,173 @@ fn createStatus() = Status.Active`;
     const result = eval(js + '\nmain()');
     expect(result).toBe(6);
   });
+
+  it('transpiles typeclass declaration', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'fn main() = Show',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBeDefined();
+    expect(result.show).toBeNull();
+  });
+
+  it('transpiles instance declaration', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'fn main() = show(42)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe('42');
+  });
+
+  it('transpiles typeclass with two type parameters', () => {
+    const src = [
+      'typeclass Convertible(a, b)',
+      '  convert(x a) -> b',
+      'impl Convertible for (Int, String)',
+      '  convert(x) = x.toString()',
+      'fn main() = convert(42)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe('42');
+  });
+
+  it('transpiles instance with multiple types', () => {
+    const src = [
+      'typeclass Convertible(a, b)',
+      '  convert(x a) -> b',
+      'impl Convertible for (String, Int)',
+      '  convert(x) = parseInt(x)',
+      'fn main() = convert("42")',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(42);
+  });
+
+  it('transpiles typeclass with multiple methods', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean',
+      'impl Eq for Int',
+      '  eq(x, y) = x == y',
+      '  notEq(x, y) = !(x == y)',
+      'fn main() = [eq(1, 1), eq(1, 2), notEq(1, 1), notEq(1, 2)]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toEqual([true, false, false, true]);
+  });
+
+  it('transpiles function with where constraint', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'fn display(x) where Show(x) = show(x)',
+      'fn main() = display(42)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe('42');
+  });
+
+  it('transpiles function with multiple constraints', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean = !(eq(x, y))',
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Eq for Int',
+      '  eq(x, y) = x == y',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'fn compare(x, y) where Eq(x), Show(x) = notEq(x, y)',
+      'fn main() = compare(1, 2)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(true);
+  });
+
+  it('transpiles typeclass with default implementation', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean = !(eq(x, y))',
+      'fn main() = Eq.notEq',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBeDefined();
+  });
+
+  it('transpiles instance inheriting default implementations', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean = !(eq(x, y))',
+      'impl Eq for Int',
+      '  eq(x, y) = x == y',
+      'fn main() = [eq(1, 1), eq(1, 2), notEq(1, 1), notEq(1, 2)]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toEqual([true, false, false, true]);
+  });
+
+  it('transpiles instance overriding default implementations', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean = !(eq(x, y))',
+      'impl Eq for String',
+      '  eq(x, y) = x == y',
+      '  notEq(x, y) = !(x == y)',
+      'fn main() = [eq("a", "a"), eq("a", "b"), notEq("a", "a"), notEq("a", "b")]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toEqual([true, false, false, true]);
+  });
+
+  it('transpiles multiple typeclasses with different defaults', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean = !(eq(x, y))',
+      'impl Eq for Int',
+      '  eq(x, y) = x == y',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'fn main() = eq(1, 1)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(true);
+  });
 });

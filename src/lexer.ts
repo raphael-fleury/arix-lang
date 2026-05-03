@@ -23,8 +23,8 @@ export interface Token {
 
 export const KEYWORDS = [
   'fn', 'let', 'mut', 'public', 'internal', 'match', 'when',
-  'import', 'type', 'if', 'then', 'else', 'try', 'catch', 'async', 'await',
-  'true', 'false', 'as', 'in', 'for', 'while',
+  'import', 'type', 'typeclass', 'impl', 'for', 'if', 'then', 'else', 'try', 'catch', 'async', 'await',
+  'true', 'false', 'as', 'in', 'while',
   'where', 'return', 'yield', 'throw', 'break', 'continue', 'loop',
 ] as const;
 
@@ -196,7 +196,40 @@ export function tokenize(source: string): Token[] {
             column += 2;
           } else if (source[pos] === '$' && source[pos + 1] === '{') {
             hasInterpolation = true;
-            break;
+            // Add the ${ to value
+            value += source[pos];
+            value += source[pos + 1];
+            pos += 2;
+            column += 2;
+            
+            // Now we need to find the matching closing brace, accounting for strings
+            let braceDepth = 1;
+            let inString = false;
+            let stringDelimiter = '';
+            
+            while (pos < source.length && braceDepth > 0) {
+              // Handle string delimiters inside the expression
+              if ((source[pos] === '"' || source[pos] === "'") && (pos === 0 || source[pos - 1] !== '\\')) {
+                if (!inString) {
+                  inString = true;
+                  stringDelimiter = source[pos];
+                } else if (source[pos] === stringDelimiter) {
+                  inString = false;
+                }
+              }
+              
+              // Only count braces when not inside a string
+              if (!inString) {
+                if (source[pos] === '{') braceDepth++;
+                else if (source[pos] === '}') braceDepth--;
+              }
+              
+              value += source[pos];
+              pos++;
+              column++;
+            }
+            // Continue reading the rest of the string after the interpolation
+            continue;
           } else if (source[pos] === '"') {
             break;
           } else {
@@ -218,16 +251,8 @@ export function tokenize(source: string): Token[] {
           break;
         }
         
-        // If has interpolation, return raw string for parser to handle
+        // If has interpolation, emit as INTERPOLATED_STRING
         if (hasInterpolation) {
-          // Reset to start of string content and read entire raw string
-          pos = stringStart;
-          value = '';
-          while (pos < source.length && source[pos] !== '"') {
-            value += source[pos];
-            pos++;
-            column++;
-          }
           tokens.push({ type: 'INTERPOLATED_STRING', value, line, column: stringStartCol });
         } else {
           tokens.push({ type: 'STRING', value: processEscapeSequences(value), line, column });

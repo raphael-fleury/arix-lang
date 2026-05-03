@@ -16,7 +16,7 @@
 
 ### 2.1 Basic Syntax
 - Indentation-based (significant whitespace)
-- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `if`, `else`, `when`, `import`, `type`, `try`, `catch`, `async`, `await`
+- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `if`, `else`, `when`, `import`, `type`, `typeclass`, `impl`, `for`, `try`, `catch`, `async`, `await`
 - Comments: `# single line`, `""" multi-line """`
 
 ### 2.2 Nomenclature
@@ -303,7 +303,142 @@ let (num, str) = pair
 
 ---
 
-## 9. Loops
+## 9. Typeclasses
+
+Typeclasses define a set of methods (a contract) that types can implement. They enable **ad-hoc polymorphism**: functions that work with multiple types, constrained by the typeclasses they implement.
+
+### 9.1 Typeclass Definition
+
+Use the `typeclass` keyword to define a typeclass. Always include type parameters in parentheses, even for single-parameter typeclasses.
+
+```python
+typeclass Show(a)
+  show(x a) -> String
+
+typeclass Eq(a)
+  eq(x a, y a) -> Boolean
+  notEq(x a, y a) -> Boolean = !(eq(x, y))  # Default implementations allowed
+
+typeclass Convertible(a, b)
+  convert(x a) -> b
+```
+
+**Rules:**
+- Name is **PascalCase**
+- Type parameters are required: `(a)`, `(a, b)`, etc.
+- Methods specify **full signatures** with parameter names and types
+- **Default implementations** use `=` and can reference other methods in the same typeclass
+- Method names are **camelCase**
+
+### 9.2 Instance Implementation
+
+Use `impl` to implement a typeclass for a specific type:
+
+```python
+impl Show for Int
+  show(x) = x.toString()
+
+impl Eq for String
+  eq(x, y) = x == y
+  notEq(x, y) = !(x == y)
+
+impl Convertible for (Int, String)
+  convert(x) = x.toString()
+```
+
+**Rules:**
+- `impl Typeclass for ConcreteType` for single-parameter typeclasses
+- `impl Typeclass for (Type1, Type2)` for multi-parameter typeclasses
+- All non-default methods must be implemented
+- Default methods are inherited automatically
+- Method bodies are single expressions
+
+### 9.3 Type Constraints in Functions
+
+Use the `where` keyword to constrain type parameters:
+
+```python
+# Single constraint
+fn display(x) where Show(x) =
+  print(show(x))
+
+# Multiple constraints
+fn compareAndPrint(x, y) where Eq(x), Show(x) =
+  if eq(x, y):
+    print("Equal: " ++ show(x))
+  else:
+    print("Not equal")
+
+# Constraints with multiple type parameters
+fn convertAndStore(value) where Convertible(value, String) =
+  let str = convert(value)
+  store(str)
+```
+
+**Rules:**
+- `where` keyword precedes comma-separated constraints
+- Each constraint: `Typeclass(typeVar, ...)`
+- Type variables must match function parameters
+- No implicit constraint propagation — each constraint must be explicit
+
+### 9.4 Method Dispatch
+
+Method dispatch is **implicit** — the compiler selects the correct implementation based on type:
+
+```python
+typeclass Show(a)
+  show(x a) -> String
+
+impl Show for Int
+  show(x) = x.toString()
+
+impl Show for String
+  show(x) = x
+
+fn displayIt(x) where Show(x) =
+  show(x)  # Dispatch resolved by type of x
+
+displayIt(42)           # "42"
+displayIt("hello")      # "hello"
+```
+
+### 9.5 Generic Implementations
+
+Implement typeclasses for generic types:
+
+```python
+impl Show for List(a) when Show(a)
+  show(list) = match list:
+    [] -> "[]"
+    [h | t] -> "[" ++ show(h) ++ ", " ++ show(t) ++ "]"
+```
+
+### 9.6 Inheritance-like Constraints
+
+Typeclasses can depend on other typeclasses:
+
+```python
+typeclass Eq(a)
+  eq(x a, y a) -> Boolean
+
+typeclass Ord(a) where Eq(a)
+  lt(x a, y a) -> Boolean
+  le(x a, y a) -> Boolean = lt(x, y) || eq(x, y)
+  gt(x a, y a) -> Boolean = !le(x, y)
+  ge(x a, y a) -> Boolean = !lt(x, y)
+
+impl Eq for Int
+  eq(x, y) = x == y
+
+impl Ord for Int
+  lt(x, y) = x < y
+```
+
+When implementing `Ord`, the `Eq` instance must already exist for the same type.
+
+---
+
+## 10. Loops
 
 ### 9.1 For Loops
 
@@ -338,7 +473,7 @@ print(sum)  # 6
 print(x) # Error: "x" only exists inside the loop
 ```
 
-### 9.2 While Loops
+### 10.2 While Loops
 
 While loops repeat while a condition is true.
 
@@ -385,15 +520,15 @@ for x in [1, 2, 3, 4, 5]:
 
 ---
 
-## 10. Modules and Imports
+## 11. Modules and Imports
 
 Arix uses ES Modules (ESM) for JavaScript interoperability. Each `.arix` file is a module.
 
-### 10.1 File Naming Convention
+### 11.1 File Naming Convention
 - Files use **kebab-case**: `user-service.arix`, `my-utils.arix`
 - Module name derives from filename: `user-service.arix` → `user-service`
 
-### 10.2 Import Syntax
+### 11.2 Import Syntax
 ```python
 # Local module (searches in src/ and project root)
 import user-service
@@ -413,14 +548,14 @@ import option
 import list
 ```
 
-### 10.3 Module Resolution
+### 11.3 Module Resolution
 ```
 1. Relative imports (./foo, ../foo) → ./foo.arix
 2. Named imports (foo-bar) → {src,root}/foo-bar.arix
 3. Stdlib (result, option, list) → built-in runtime
 ```
 
-### 10.4 Visibility
+### 11.4 Visibility
 ```python
 # Private (default) - file only
 fn helper() = ...
@@ -432,7 +567,7 @@ fn helper() = ...
 public fn publicFunc() = ...
 ```
 
-### 10.5 Compilation
+### 11.5 Compilation
 ```bash
 # Compile single file (resolves and compiles dependencies)
 arix build src/main.arix -o dist/
@@ -447,7 +582,7 @@ dist/
 └── helper-utils.js
 ```
 
-### 10.6 Example Project Structure
+### 11.6 Example Project Structure
 ```
 project/
 ├── src/
@@ -462,23 +597,23 @@ project/
 
 ---
 
-## 11. Error Handling
+## 12. Error Handling
 
-### 11.1 Option Type
+### 12.1 Option Type
 ```python
 type Option(a) = Some(a) | None
 
 fn findUser(id Int) Option(User) = ...
 ```
 
-### 11.2 Result Type
+### 12.2 Result Type
 ```python
 type Result(a, e) = Ok(a) | Err(e)
 
 fn parseInt(s String) Result(Int, String) = ...
 ```
 
-### 11.3 Async Error Handling
+### 12.3 Async Error Handling
 ```python
 async fn fetchUser(id Int) Result(User, String) =
     try await http.get("/api/users/${id}")
@@ -488,9 +623,9 @@ async fn fetchUser(id Int) Result(User, String) =
 
 ---
 
-## 12. Documentation
+## 13. Documentation
 
-### 12.1 Docstrings
+### 13.1 Docstrings
 ```python
 """
 Calculates the area of a shape.
@@ -499,7 +634,7 @@ Returns the value in square units.
 fn area(shape Shape) Float = ...
 ```
 
-### 12.2 Type Annotations
+### 13.2 Type Annotations
 ```python
 public fn fetchUser
     """Fetches a user by ID.
@@ -514,26 +649,27 @@ public fn fetchUser
 
 ---
 
-## 13. Reserved Keywords
+## 14. Reserved Keywords
 ```
 fn, let, let mut, if, else, match, when, import, type,
 public, internal, async, await, try, catch, throw,
 return, yield, as, in, for, while, loop, break, continue,
-true, false, None, Ok, Err, Some, module, where, use
+true, false, None, Ok, Err, Some, module, where, use,
+typeclass, impl
 ```
 
 ---
 
-## 14. Examples
+## 15. Examples
 
-### 14.1 Hello World
+### 15.1 Hello World
 ```python
 fn main() =
     let name = "World"
     print("Hello, ${name}!")
 ```
 
-### 14.2 Functional Pipeline
+### 15.2 Functional Pipeline
 ```python
 fn processNumbers(nums List(Int)) Int =
     nums
@@ -546,7 +682,7 @@ public fn main() =
     print(result)  # 16
 ```
 
-### 13.3 Pattern Matching
+### 15.3 Pattern Matching
 ```python
 type Shape = Circle(r Float) | Rectangle(w Float, h Float)
 
@@ -563,7 +699,25 @@ fn describe(shape Shape) String =
         _ -> "Rectangle"
 ```
 
-### 13.4 Async/Await
+### 15.4 Typeclasses
+```python
+typeclass Show(a)
+  show(x a) -> String
+
+impl Show for Int
+  show(x) = x.toString()
+
+impl Show for String
+  show(x) = x
+
+fn display(x) where Show(x) =
+  print(show(x))
+
+display(42)        # "42"
+display("hello")   # "hello"
+```
+
+### 15.5 Async/Await
 ```python
 async fn fetchUserData(id Int) Result(User, String) =
     let response = await http.get("/api/users/${id}")
@@ -587,7 +741,7 @@ program       ::= stmt*
 stmt          ::= letDecl | fnDecl | typeDecl | importStmt | expr
 
 letDecl       ::= 'let' ['mut'] pattern ['??' expr] '=' expr
-fnDecl        ::= ['public' | 'internal'] 'async'? 'fn' pattern params? ['->' type] '=' expr
+fnDecl        ::= ['public' | 'internal'] 'async'? 'fn' pattern params? ['->' type] ['where' constraints] '=' expr
 pattern       ::= identifier | recordPat | tuplePat | listPat | typePat
 recordPat     ::= '{' (pattern (',' pattern)*)? ['..' ident]? '}'
 tuplePat      ::= '(' pattern (',' pattern)* ')'
@@ -603,6 +757,12 @@ pipeExpr      ::= expr ('|>' expr)+
 
 importStmt    ::= 'import' ident ['as' ident] ['(' importItems ')'] ['hiding' '(' importItems ')']
 importItems   ::= ident (',' ident)*
+
+typeclassDecl ::= 'typeclass' ident '(' typeParams ')' [constraints] methodDecl*
+methodDecl    ::= ident params '->' type ['=' expr]
+instanceDecl  ::= 'impl' ident ['for' '(' typeList ')'] ['where' constraints] methodImpl*
+constraints   ::= 'where' constraint (',' constraint)*
+constraint    ::= ident '(' type (',' type)* ')'
 ```
 
 ---
@@ -636,6 +796,7 @@ type Tuple3(a, b, c) = (a, b, c)
 | Type system | dynamic + TypeGuard | strong static |
 | Null | None | Option/Result |
 | Pipe | \|> (3.10+) | native |
+| Typeclasses | ABC/Protocols | native typeclasses |
 
 ---
 

@@ -31,6 +31,11 @@ import type {
   AwaitExpr,
   ImportStmt,
   TypeDecl,
+  TypeclassDecl,
+  InstanceDecl,
+  MethodDecl,
+  MethodImpl,
+  Constraint,
   ForExpr,
   WhileExpr,
   BreakExpr,
@@ -102,6 +107,10 @@ class Parser {
           return this.parseLetDecl();
         case 'type':
           return this.parseTypeDecl();
+        case 'typeclass':
+          return this.parseTypeclassDecl();
+        case 'impl':
+          return this.parseInstanceDecl();
         case 'import':
           return this.parseImportStmt();
         case 'public':
@@ -169,6 +178,13 @@ class Parser {
       returnType = this.parseType();
     }
 
+    // Parse optional where constraints
+    let constraints: Constraint[] | undefined;
+    if (this.current().value === 'where') {
+      this.advance();
+      constraints = this.parseConstraints();
+    }
+
     this.skipNewlines();
     this.expect('OPERATOR', '=');
     this.skipNewlines();
@@ -195,6 +211,7 @@ class Parser {
       params,
       body,
       returnType,
+      constraints,
       visibility: 'private',
       isAsync,
     };
@@ -732,14 +749,30 @@ class Parser {
           currentPart = '';
         }
 
-        // Find the matching closing brace
+        // Find the matching closing brace, accounting for strings
         i += 2; // skip ${
         let braceDepth = 1;
         let exprStart = i;
+        let inString = false;
+        let stringDelimiter = '';
 
         while (i < rawString.length && braceDepth > 0) {
-          if (rawString[i] === '{') braceDepth++;
-          else if (rawString[i] === '}') braceDepth--;
+          // Handle string delimiters
+          if ((rawString[i] === '"' || rawString[i] === "'") && (i === 0 || rawString[i - 1] !== '\\')) {
+            if (!inString) {
+              inString = true;
+              stringDelimiter = rawString[i];
+            } else if (rawString[i] === stringDelimiter) {
+              inString = false;
+            }
+          }
+
+          // Only count braces when not inside a string
+          if (!inString) {
+            if (rawString[i] === '{') braceDepth++;
+            else if (rawString[i] === '}') braceDepth--;
+          }
+
           if (braceDepth > 0) i++;
         }
 
@@ -816,6 +849,13 @@ class Parser {
     if (this.current().value === '->') {
       this.advance();
       returnType = this.parseType();
+    }
+
+    // Parse optional where constraints (for function expressions, though less common)
+    let constraints: Constraint[] | undefined;
+    if (this.current().value === 'where') {
+      this.advance();
+      constraints = this.parseConstraints();
     }
 
     this.skipNewlines();
@@ -1242,6 +1282,174 @@ class Parser {
     }
 
     throw new Error(`Expected type, got ${token.type} "${token.value}"`);
+  }
+
+  private parseTypeclassDecl(): TypeclassDecl {
+    this.advance(); // consume 'typeclass'
+    const name = this.expect('IDENTIFIER').value;
+    const typeParams: string[] = [];
+
+    // Parse type parameters: (a), (a, b), etc.
+    if (this.current().value === '(') {
+      this.advance();
+      while (this.current().value !== ')') {
+        typeParams.push(this.expect('IDENTIFIER').value);
+        if (this.current().value === ',') this.advance();
+      }
+      this.expect('PUNCTUATION', ')');
+    }
+
+    // Parse optional constraints: where Eq(a), Show(a)
+    let constraints: Constraint[] = [];
+    if (this.current().value === 'where') {
+      this.advance();
+      constraints = this.parseConstraints();
+    }
+
+    this.skipNewlines();
+    this.expect('INDENT');
+    this.skipNewlines();
+
+    // Parse methods
+    const methods: MethodDecl[] = [];
+    while (this.current().type !== 'DEDENT' && this.current().type !== 'EOF') {
+      const methodName = this.expect('IDENTIFIER').value;
+      this.expect('PUNCTUATION', '(');
+      
+      const params: Param[] = [];
+      while (this.current().value !== ')') {
+        const paramName = this.expect('IDENTIFIER').value;
+        let paramType: Node | undefined;
+        
+        if (this.current().type === 'IDENTIFIER' || (this.current().type === 'KEYWORD' && this.current().value !== ')')) {
+          paramType = this.parseType();
+        }
+        
+        params.push({ type: 'Param', name: paramName, paramType });
+        if (this.current().value === ',') this.advance();
+      }
+      this.expect('PUNCTUATION', ')');
+      
+      this.expect('OPERATOR', '->');
+      const returnType = this.parseType();
+      
+      let body: Node | undefined;
+      if (this.current().value === '=') {
+        this.advance();
+        body = this.parseExpr();
+      }
+      
+      methods.push({
+        type: 'MethodDecl',
+        name: methodName,
+        params,
+        returnType,
+        body,
+      });
+      
+      this.skipNewlines();
+    }
+
+    this.expect('DEDENT');
+    return { type: 'TypeclassDecl', name, typeParams, constraints, methods };
+  }
+
+  private parseInstanceDecl(): InstanceDecl {
+    this.advance(); // consume 'impl'
+    const typeclass = this.expect('IDENTIFIER').value;
+    
+    // Parse 'for' keyword
+    this.expect('KEYWORD', 'for');
+    
+    // Parse for-types: Int, String, (Int, String), etc.
+    const forTypes: Node[] = [];
+    
+    if (this.current().value === '(') {
+      // Multiple types: (Int, String)
+      this.advance();
+      while (this.current().value !== ')') {
+        forTypes.push(this.parseType());
+        if (this.current().value === ',') this.advance();
+      }
+      this.expect('PUNCTUATION', ')');
+    } else {
+      // Single type: Int
+      forTypes.push(this.parseType());
+    }
+
+    // Parse optional constraints: where Eq(a), Show(a)
+    let constraints: Constraint[] = [];
+    if (this.current().value === 'where') {
+      this.advance();
+      constraints = this.parseConstraints();
+    }
+
+    this.skipNewlines();
+    this.expect('INDENT');
+    this.skipNewlines();
+
+    // Parse method implementations
+    const methods: MethodImpl[] = [];
+    while (this.current().type !== 'DEDENT' && this.current().type !== 'EOF') {
+      const methodName = this.expect('IDENTIFIER').value;
+      this.expect('PUNCTUATION', '(');
+      
+      // Parse and capture parameters
+      const params: string[] = [];
+      while (this.current().value !== ')') {
+        if (this.current().type === 'IDENTIFIER') {
+          params.push(this.current().value);
+          this.advance();
+        } else {
+          this.parsePattern(); // For more complex patterns
+        }
+        if (this.current().value === ',') this.advance();
+      }
+      this.expect('PUNCTUATION', ')');
+      
+      this.expect('OPERATOR', '=');
+      const body = this.parseExpr();
+      
+      methods.push({
+        type: 'MethodImpl',
+        name: methodName,
+        params,
+        body,
+      });
+      
+      this.skipNewlines();
+    }
+
+    this.expect('DEDENT');
+    return { type: 'InstanceDecl', typeclass, forTypes, constraints, methods };
+  }
+
+  private parseConstraints(): Constraint[] {
+    const constraints: Constraint[] = [];
+    
+    while (true) {
+      const name = this.expect('IDENTIFIER').value;
+      const args: string[] = [];
+      
+      if (this.current().value === '(') {
+        this.advance();
+        while (this.current().value !== ')') {
+          args.push(this.expect('IDENTIFIER').value);
+          if (this.current().value === ',') this.advance();
+        }
+        this.expect('PUNCTUATION', ')');
+      }
+      
+      constraints.push({ type: 'Constraint', name, args });
+      
+      if (this.current().value === ',') {
+        this.advance();
+      } else {
+        break;
+      }
+    }
+    
+    return constraints;
   }
 }
 

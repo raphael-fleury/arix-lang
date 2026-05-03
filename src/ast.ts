@@ -27,6 +27,11 @@ export type NodeType =
   | 'AwaitExpr'
   | 'ImportStmt'
   | 'TypeDecl'
+  | 'TypeclassDecl'
+  | 'InstanceDecl'
+  | 'MethodDecl'
+  | 'MethodImpl'
+  | 'Constraint'
   | 'ForExpr'
   | 'WhileExpr'
   | 'BreakExpr'
@@ -132,6 +137,7 @@ export interface FunctionDecl extends Node {
   params: Param[];
   body: Node;
   returnType?: Node;
+  constraints?: Constraint[];
   visibility: 'public' | 'internal' | 'private';
   isAsync: boolean;
 }
@@ -257,6 +263,43 @@ export interface TypeDecl extends Node {
   typeParams?: string[];
   variants: TypeVariant[];
   recordFields?: { name: string; fieldType: Node; default?: Node }[];
+}
+
+export interface TypeclassDecl extends Node {
+  type: 'TypeclassDecl';
+  name: string;
+  typeParams: string[];
+  constraints?: Constraint[];
+  methods: MethodDecl[];
+}
+
+export interface MethodDecl extends Node {
+  type: 'MethodDecl';
+  name: string;
+  params: Param[];
+  returnType: Node;
+  body?: Node; // Optional body for default implementations
+}
+
+export interface InstanceDecl extends Node {
+  type: 'InstanceDecl';
+  typeclass: string;
+  forTypes: Node[];
+  constraints?: Constraint[];
+  methods: MethodImpl[];
+}
+
+export interface MethodImpl extends Node {
+  type: 'MethodImpl';
+  name: string;
+  params: string[]; // Parameter names
+  body: Node; // Single expression
+}
+
+export interface Constraint extends Node {
+  type: 'Constraint';
+  name: string;
+  args: string[]; // Type arguments like 'x' or concrete types like 'Int'
 }
 
 export interface TypeVariant {

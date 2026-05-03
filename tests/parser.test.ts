@@ -260,4 +260,121 @@ describe('Parser', () => {
     expect(fn.body.operator).toBe('++');
     expect(fn.body.right.type).toBe('StringLiteral');
   });
+
+  it('parses typeclass declaration', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+    ].join('\n');
+    const ast = parse(src);
+    expect(ast.body[0].type).toBe('TypeclassDecl');
+    const tc = ast.body[0] as any;
+    expect(tc.name).toBe('Show');
+    expect(tc.typeParams).toEqual(['a']);
+    expect(tc.methods.length).toBe(1);
+    expect(tc.methods[0].name).toBe('show');
+    expect(tc.methods[0].params.length).toBe(1);
+  });
+
+  it('parses typeclass with multiple type parameters', () => {
+    const src = [
+      'typeclass Convertible(a, b)',
+      '  convert(x a) -> b',
+    ].join('\n');
+    const ast = parse(src);
+    const tc = ast.body[0] as any;
+    expect(tc.typeParams).toEqual(['a', 'b']);
+  });
+
+  it('parses typeclass with multiple methods', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean',
+    ].join('\n');
+    const ast = parse(src);
+    const tc = ast.body[0] as any;
+    expect(tc.methods.length).toBe(2);
+    expect(tc.methods[0].name).toBe('eq');
+    expect(tc.methods[1].name).toBe('notEq');
+  });
+
+  it('parses instance declaration', () => {
+    const src = [
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+    ].join('\n');
+    const ast = parse(src);
+    expect(ast.body[0].type).toBe('InstanceDecl');
+    const inst = ast.body[0] as any;
+    expect(inst.typeclass).toBe('Show');
+    expect(inst.methods.length).toBe(1);
+    expect(inst.methods[0].name).toBe('show');
+  });
+
+  it('parses instance with multiple types', () => {
+    const src = [
+      'impl Convertible for (Int, String)',
+      '  convert(x) = x.toString()',
+    ].join('\n');
+    const ast = parse(src);
+    const inst = ast.body[0] as any;
+    expect(inst.typeclass).toBe('Convertible');
+    expect(inst.forTypes.length).toBe(2);
+  });
+
+  it('parses instance with multiple methods', () => {
+    const src = [
+      'impl Eq for String',
+      '  eq(x, y) = x == y',
+      '  notEq(x, y) = !(x == y)',
+    ].join('\n');
+    const ast = parse(src);
+    const inst = ast.body[0] as any;
+    expect(inst.methods.length).toBe(2);
+  });
+
+  it('parses function with where constraints', () => {
+    const src = 'fn printValue(x) where Show(x) = print(show(x))';
+    const ast = parse(src);
+    const fn = ast.body[0] as any;
+    expect(fn.constraints).toBeDefined();
+    expect(fn.constraints.length).toBe(1);
+    expect(fn.constraints[0].name).toBe('Show');
+    expect(fn.constraints[0].args).toEqual(['x']);
+  });
+
+  it('parses function with multiple constraints', () => {
+    const src = 'fn compare(x, y) where Eq(x), Show(x) = eq(x, y)';
+    const ast = parse(src);
+    const fn = ast.body[0] as any;
+    expect(fn.constraints.length).toBe(2);
+    expect(fn.constraints[0].name).toBe('Eq');
+    expect(fn.constraints[1].name).toBe('Show');
+  });
+
+  it('parses typeclass with default implementations', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  eq(x a, y a) -> Boolean',
+      '  notEq(x a, y a) -> Boolean = notEq_default(x, y)',
+    ].join('\n');
+    const ast = parse(src);
+    const tc = ast.body[0] as any;
+    expect(tc.methods.length).toBe(2);
+    expect(tc.methods[0].body).toBeUndefined();
+    expect(tc.methods[1].body).toBeDefined();
+    expect(tc.methods[1].body.type).toBe('CallExpr');
+  });
+
+  it('parses instance without implementing methods with defaults', () => {
+    const src = [
+      'impl Eq for Int',
+      '  eq(x, y) = x == y',
+    ].join('\n');
+    const ast = parse(src);
+    const inst = ast.body[0] as any;
+    expect(inst.methods.length).toBe(1);
+    expect(inst.methods[0].name).toBe('eq');
+  });
 });
