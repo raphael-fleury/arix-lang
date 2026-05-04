@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { transpile } from '../src/transpiler.js';
 import { parse } from '../src/parser.js';
 
+function evalTranspiled(js: string, mainCall = true): unknown {
+  const code = js.replace(/export\s*\{[^}]*\};?/g, '');
+  return eval(code + (mainCall ? '\nmain()' : ''));
+}
+
 describe('Transpiler', () => {
   it('transpiles simple expression', () => {
     const ast = parse('1 + 2');
@@ -259,7 +264,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBeDefined();
     expect(result.show).toBeNull();
   });
@@ -274,7 +279,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBe('42');
   });
 
@@ -288,7 +293,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBe('42');
   });
 
@@ -302,7 +307,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBe(42);
   });
 
@@ -318,7 +323,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toEqual([true, false, false, true]);
   });
 
@@ -333,7 +338,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBe('42');
   });
 
@@ -353,7 +358,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBe(true);
   });
 
@@ -366,7 +371,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBeDefined();
   });
 
@@ -381,7 +386,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toEqual([true, false, false, true]);
   });
 
@@ -397,7 +402,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toEqual([true, false, false, true]);
   });
 
@@ -416,7 +421,7 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = evalTranspiled(js);
     expect(result).toBe(true);
   });
 });
