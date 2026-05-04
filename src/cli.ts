@@ -2,9 +2,9 @@
 
 import { parse } from './parser.js';
 import { Transpiler } from './transpiler.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'fs';
-import { join, dirname, relative, basename } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { join, dirname, relative, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tokenize } from './lexer.js';
 import { FunctionDecl, TypeDecl, TypeclassDecl, ImportStmt } from './ast.js';
 
@@ -100,8 +100,7 @@ async function run(file: string | undefined) {
     const jsFile = join(tmpDir, basename(file, '.arix') + '.js');
     console.log(`Running ${jsFile}...\n`);
 
-    const { execSync } = await import('child_process');
-    const fileUrl = pathToFileURL(jsFile).href;
+    const { execSync } = await import('node:child_process');
     execSync(`node "${jsFile}"`, { stdio: 'inherit' });
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : error}`);
@@ -253,7 +252,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     if (isStdLib) {
       outputFile = join(outputDir, basename(arixFile, '.arix') + '.js');
     } else {
-      const relFromEntry = relative(entryDir, arixFile).replace(/\\/g, '/');
+      const relFromEntry = relative(entryDir, arixFile).replaceAll('\\', '/');
       const dir = join(outputDir, dirname(relFromEntry));
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
@@ -316,4 +315,4 @@ function resolveModule(moduleName: string, fromDir: string): string | null {
   return null;
 }
 
-main();
+await main();
