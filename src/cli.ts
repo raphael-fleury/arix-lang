@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
 import { parse } from './parser.js';
-import { transpile, Transpiler } from './transpiler.js';
+import { Transpiler } from './transpiler.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'fs';
 import { join, dirname, relative, basename } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { tokenize } from './lexer.js';
-import { FunctionDecl, TypeDecl, ImportStmt } from './ast.js';
+import { FunctionDecl, TypeDecl, TypeclassDecl, ImportStmt } from './ast.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const RUNTIME_SOURCE = join(__dirname, '..', 'runtime', 'arix-runtime.js');
 
-const STD_LIBS = ['result', 'option', 'list'];
+const STD_LIB_DIR = join(__dirname, '..', 'stdlib');
 
 interface ModuleInfo {
   filePath: string;
@@ -195,6 +195,19 @@ function collectModuleInfo(arixFile: string): ModuleInfo {
     if (node.type === 'TypeDecl') {
       const type = node as TypeDecl;
       exports.push(type.name);
+      for (const variant of type.variants) {
+        exports.push(variant.name);
+      }
+    }
+    if (node.type === 'TypeclassDecl') {
+      const tc = node as TypeclassDecl;
+      exports.push(tc.name);
+      for (const method of tc.methods) {
+        exports.push(method.name);
+      }
+    }
+    if (node.type === 'InstanceDecl') {
+      // Instances are not directly exported by name, but they provide implementations
     }
     if (node.type === 'ImportStmt') {
       const imp = node as ImportStmt;
@@ -218,8 +231,6 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     moduleInfoMap.set(filePath, info);
 
     for (const moduleName of info.imports) {
-      if (STD_LIBS.includes(moduleName.toLowerCase())) continue;
-
       const depFile = resolveModule(moduleName, dirname(filePath));
       if (depFile && existsSync(depFile)) {
         collectModule(depFile);
@@ -236,13 +247,24 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
   function compileFile(arixFile: string, isMain = false): void {
     if (compiled[arixFile]) return;
 
-    const relFromEntry = relative(entryDir, arixFile).replace(/\\/g, '/');
-    const dir = join(outputDir, dirname(relFromEntry));
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+    const isStdLib = arixFile.startsWith(STD_LIB_DIR);
+    let outputFile: string;
+
+    if (isStdLib) {
+      outputFile = join(outputDir, basename(arixFile, '.arix') + '.js');
+    } else {
+      const relFromEntry = relative(entryDir, arixFile).replace(/\\/g, '/');
+      const dir = join(outputDir, dirname(relFromEntry));
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+      outputFile = join(dir, basename(arixFile, '.arix') + '.js');
     }
-    const outputFileDir = dir;
-    const outputFile = join(dir, arixFile.replace(/\.arix$/, '.js').replace(/\\/g, '/').split('/').pop()!);
+
+    const outputFileDir = dirname(outputFile);
+    if (!existsSync(outputFileDir)) {
+      mkdirSync(outputFileDir, { recursive: true });
+    }
 
     const source = readFileSync(arixFile, 'utf-8');
     if (process.env.DEBUG) console.log('Tokens:', tokenize(source));
@@ -275,6 +297,11 @@ function resolveModule(moduleName: string, fromDir: string): string | null {
     if (existsSync(basePath)) {
       return basePath;
     }
+  }
+
+  const stdLibPath = join(STD_LIB_DIR, moduleName + '.arix');
+  if (existsSync(stdLibPath)) {
+    return stdLibPath;
   }
 
   const searchPaths = [fromDir, join(fromDir, 'src'), process.cwd(), join(process.cwd(), 'src')];

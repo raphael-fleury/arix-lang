@@ -472,12 +472,23 @@ class Parser {
           if (this.current().value === '(') {
             this.advance();
             while (this.current().value !== ')') {
-              const fieldName = this.current().type === 'IDENTIFIER' ? this.expect('IDENTIFIER').value : '';
+              let fieldName = '';
               let fieldType: Node = { type: 'Identifier', name: 'any' } as Identifier;
               
-              // Only parse type if we're not at the closing paren or comma
-              if (this.current().value !== ')' && this.current().value !== ',') {
-                fieldType = this.parseType();
+              if (this.current().type === 'IDENTIFIER') {
+                const firstIdent = this.expect('IDENTIFIER').value;
+                if (this.current().value === ':') {
+                  this.advance();
+                  fieldName = firstIdent;
+                  if (this.current().value !== ')' && this.current().value !== ',') {
+                    fieldType = this.parseType();
+                  }
+                } else {
+                  fieldName = firstIdent;
+                  if (this.current().value !== ')' && this.current().value !== ',') {
+                    fieldType = this.parseType();
+                  }
+                }
               }
               
               fields.push({ name: fieldName, fieldType });
@@ -1313,6 +1324,10 @@ class Parser {
     // Parse methods
     const methods: MethodDecl[] = [];
     while (this.current().type !== 'DEDENT' && this.current().type !== 'EOF') {
+      if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
+        break;
+      }
+      
       const methodName = this.expect('IDENTIFIER').value;
       this.expect('PUNCTUATION', '(');
       
@@ -1350,7 +1365,9 @@ class Parser {
       this.skipNewlines();
     }
 
-    this.expect('DEDENT');
+    if (this.current().type === 'DEDENT') {
+      this.advance();
+    }
     return { type: 'TypeclassDecl', name, typeParams, constraints, methods };
   }
 
@@ -1391,6 +1408,10 @@ class Parser {
     // Parse method implementations
     const methods: MethodImpl[] = [];
     while (this.current().type !== 'DEDENT' && this.current().type !== 'EOF') {
+      if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
+        break;
+      }
+      
       const methodName = this.expect('IDENTIFIER').value;
       this.expect('PUNCTUATION', '(');
       
@@ -1408,7 +1429,16 @@ class Parser {
       this.expect('PUNCTUATION', ')');
       
       this.expect('OPERATOR', '=');
-      const body = this.parseExpr();
+      
+      let body: Node;
+      this.skipNewlines();
+      
+      if (this.current().type === 'INDENT' || 
+          (this.current().type === 'KEYWORD' && ['let', 'if', 'match', 'try'].includes(this.current().value))) {
+        body = this.parseBlockBody();
+      } else {
+        body = this.parseExpr();
+      }
       
       methods.push({
         type: 'MethodImpl',
@@ -1420,7 +1450,9 @@ class Parser {
       this.skipNewlines();
     }
 
-    this.expect('DEDENT');
+    if (this.current().type === 'DEDENT') {
+      this.advance();
+    }
     return { type: 'InstanceDecl', typeclass, forTypes, constraints, methods };
   }
 

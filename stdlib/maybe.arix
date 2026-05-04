@@ -1,0 +1,25 @@
+"""
+Maybe - optional value type.
+"""
+
+type Maybe(a) = Some(value: a) | None
+
+public fn map(value, f) =
+    match value:
+        Some(v) -> Some(f(v))
+        None -> None
+
+public fn flatMap(value, f) =
+    match value:
+        Some(v) -> f(v)
+        None -> None
+
+public fn getOrElse(value, defaultValue) =
+    match value:
+        Some(v) -> v
+        None -> defaultValue
+
+public fn isSome(value) =
+    match value:
+        Some(_) -> true
+        None -> false

@@ -40,7 +40,7 @@ import type {
 
 // Runtime import will be generated dynamically based on output location
 const RUNTIME_IMPORT = (relativePath: string) => 
-  `import { List, Result, Maybe, print, createADT } from '${relativePath}';`;
+  `import { createADT, print } from '${relativePath}';`;
 
 export class Transpiler {
   private output = '';
@@ -195,6 +195,7 @@ export class Transpiler {
       case 'MemberExpr':
       case 'IndexExpr':
       case 'UnaryExpr':
+      case 'MatchExpr':
         this.writeln(this.transpileExpr(node) + ';');
         break;
       default:
@@ -219,8 +220,23 @@ export class Transpiler {
     } else if (node.params.length === 0) {
       this.writeln(`${visibility}${asyncPrefix}function ${node.name}() {`);
       this.indent++;
-      const body = this.transpileExpr(node.body);
-      this.writeln(`return ${body};`);
+      
+      if (node.body.type === 'BlockExpr') {
+        const block = node.body as BlockExpr;
+        const statements = block.body.slice(0, -1);
+        const last = block.body[block.body.length - 1];
+        for (const stmt of statements) {
+          this.transpileNode(stmt);
+        }
+        if (last) {
+          const lastExpr = this.transpileExpr(last);
+          this.writeln(`return ${lastExpr};`);
+        }
+      } else {
+        const body = this.transpileExpr(node.body);
+        this.writeln(`return ${body};`);
+      }
+      
       this.indent--;
       this.writeln('}');
     } else {
@@ -314,6 +330,8 @@ export class Transpiler {
   }
 
   private transpileTypeDecl(node: TypeDecl): void {
+    this.exports.push(node.name);
+    
     if (node.recordFields) {
       const fields = node.recordFields.map(f => {
         const defaultPart = f.default ? ` = ${this.transpileExpr(f.default)}` : '';
@@ -321,7 +339,6 @@ export class Transpiler {
       }).join(', ');
       this.writeln(`const ${node.name} = { ${fields} };`);
     } else {
-      // Use createADT for union types (ADTs)
       this.needsRuntime = true;
       
       const variants: Record<string, string[]> = {};
@@ -329,8 +346,8 @@ export class Transpiler {
         const fieldNames = variant.fields.map(f => f.name);
         variants[variant.name] = fieldNames;
         this.constructors.set(variant.name, `${node.name}.${variant.name}`);
-        // Register field names for pattern matching
         this.variantFieldNames.set(variant.name, fieldNames);
+        this.exports.push(variant.name);
       }
       
       const variantsStr = JSON.stringify(variants)
@@ -338,6 +355,10 @@ export class Transpiler {
         .replace(/'([^']+)':/g, '$1:');
       
       this.writeln(`const ${node.name} = createADT('${node.name}', ${variantsStr});`);
+      
+      for (const variant of node.variants) {
+        this.writeln(`const ${variant.name} = ${node.name}.${variant.name};`);
+      }
     }
     this.writeln();
   }
@@ -355,34 +376,34 @@ export class Transpiler {
   }
 
   private transpileImportStmt(node: ImportStmt): void {
-    // Stdlib modules - handled by runtime
     const stdlibModules = ['result', 'maybe', 'list'];
-    if (stdlibModules.includes(node.module.toLowerCase())) {
-      this.needsRuntime = true;
-      if (node.module.toLowerCase() === 'result') {
-        this.constructors.set('Ok', 'Result.Ok');
-        this.constructors.set('Err', 'Result.Err');
-      } else if (node.module.toLowerCase() === 'maybe') {
-        this.constructors.set('Just', 'Maybe.Just');
-        this.constructors.set('Nothing', 'Maybe.Nothing');
-      } else if (node.module.toLowerCase() === 'list') {
-        this.constructors.set('Cons', 'List.cons');
-        this.constructors.set('Nil', 'List.nil');
+    const moduleNameLower = node.module.toLowerCase();
+
+    if (stdlibModules.includes(moduleNameLower)) {
+      const jsPath = `./${moduleNameLower}.js`;
+      const moduleInfo = this.moduleInfoMap.get(node.module);
+
+      if (moduleInfo && moduleInfo.exports.length > 0) {
+        const itemsStr = moduleInfo.exports.join(', ');
+        this.esmImports.push(`import { ${itemsStr} } from '${jsPath}';`);
+        for (const item of moduleInfo.exports) {
+          this.importedNames.set(item, '');
+          this.constructors.set(item, item);
+        }
+      } else {
+        this.esmImports.push(`import * as ${moduleNameLower} from '${jsPath}';`);
       }
       return;
     }
 
-    // Local modules - generate ESM import
-    this.needsRuntime = true; // Runtime is always needed for print, Result, Maybe, List
+    this.needsRuntime = true;
     
     const jsPath = this.moduleToJsPath(node.module, node.isRelative);
     
-    // Generate namespace import for local modules
     const moduleName = this.getModuleName(node.module);
     const alias = node.alias || moduleName;
     
     if (node.items && node.items.length > 0) {
-      // Selective import: import { foo, bar } from './module.js'
       const itemsStr = node.items.join(', ');
       this.esmImports.push(`import { ${itemsStr} } from '${jsPath}';`);
       for (const item of node.items) {
@@ -390,15 +411,12 @@ export class Transpiler {
         this.constructors.set(item, item);
       }
     } else if (node.alias) {
-      // Alias import: import * as Alias from './module.js'
       this.esmImports.push(`import * as ${alias} from '${jsPath}';`);
       this.importedNames.set(alias, alias);
       this.constructors.set(alias, alias);
     } else {
-      // Default: import all from module
       this.esmImports.push(`import * as ${alias} from '${jsPath}';`);
       
-      // Get exports from module info and register them with namespace prefix
       const moduleKey = node.isRelative ? node.module : this.getModuleName(node.module);
       const moduleInfo = this.moduleInfoMap.get(node.module) || this.moduleInfoMap.get(moduleKey);
       
@@ -447,9 +465,14 @@ export class Transpiler {
       case 'Identifier': {
         const name = (node as Identifier).name;
         const fullName = this.constructors.get(name);
-        if (fullName) return fullName;
+        if (fullName) {
+          const fieldNames = this.variantFieldNames.get(name);
+          if (fieldNames && fieldNames.length === 0) {
+            return `${fullName}()`;
+          }
+          return fullName;
+        }
         
-        // Check if this identifier is from an imported module
         const namespace = this.importedNames.get(name);
         if (namespace) {
           return namespace ? `${namespace}.${name}` : name;
@@ -858,6 +881,11 @@ export class Transpiler {
   }
 
   private transpileTypeclassDecl(node: TypeclassDecl): void {
+    this.exports.push(node.name);
+    for (const method of node.methods) {
+      this.exports.push(method.name);
+    }
+    
     // Generate default implementations for methods with bodies
     for (const method of node.methods) {
       if (method.body) {
@@ -1043,7 +1071,7 @@ export class Transpiler {
       case 'List':
         return 'Array.isArray(x)';
       default:
-        return `x instanceof ${typeName}`;
+        return `x && x._type === '${typeName}'`;
     }
   }
 }

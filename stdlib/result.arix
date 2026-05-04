@@ -1,0 +1,21 @@
+type Result(a, e) = Ok(value: a) | Err(error: e)
+
+public fn map(result, f) =
+    match result:
+        Ok(v) -> Ok(f(v))
+        Err(e) -> Err(e)
+
+public fn flatMap(result, f) =
+    match result:
+        Ok(v) -> f(v)
+        Err(e) -> Err(e)
+
+public fn getOrElse(result, defaultValue) =
+    match result:
+        Ok(v) -> v
+        Err(_) -> defaultValue
+
+public fn isOk(result) =
+    match result:
+        Ok(_) -> true
+        Err(_) -> false

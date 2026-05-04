@@ -1,0 +1,26 @@
+"""
+List utilities for working with immutable lists.
+"""
+
+import maybe
+
+public fn head(xs) =
+    match xs:
+        [] -> None
+        [h | _] -> Some(h)
+
+public fn last(xs) =
+    match xs:
+        [] -> None
+        [x] -> Some(x)
+        [_ | t] -> last(t)
+
+public fn length(xs) =
+    match xs:
+        [] -> 0
+        [_ | t] -> 1 + length(t)
+
+public fn isEmpty(xs) =
+    match xs:
+        [] -> true
+        _ -> false
