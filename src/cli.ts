@@ -243,6 +243,27 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
 
   collectModule(entryFile);
 
+  // Collect all typeclasses from all files
+  function collectTypeclasses(): Map<string, TypeclassDecl> {
+    const allTypeclasses: Map<string, TypeclassDecl> = new Map();
+
+    for (const filePath of moduleInfoMap.keys()) {
+      const source = readFileSync(filePath, 'utf-8');
+      const ast = parse(source);
+
+      for (const node of ast.body) {
+        if (node.type === 'TypeclassDecl') {
+          const tc = node as TypeclassDecl;
+          allTypeclasses.set(tc.name, tc);
+        }
+      }
+    }
+
+    return allTypeclasses;
+  }
+
+  const globalTypeclasses = collectTypeclasses();
+
   function compileFile(arixFile: string, isMain = false): void {
     if (compiled[arixFile]) return;
 
@@ -271,6 +292,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     const ast = parse(source);
     const transpiler = new Transpiler();
     transpiler.setModuleInfo(moduleNameToInfo);
+    transpiler.setGlobalTypeclasses(globalTypeclasses);
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
 
