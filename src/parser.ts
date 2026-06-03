@@ -966,8 +966,8 @@ class Parser {
         break;
       }
       
-      // Stop at closing punctuation (only at top level, not in multi-line)
-      if (token.type === 'PUNCTUATION' && (token.value === ')' || token.value === '}' || token.value === ']')) {
+      // Stop at closing punctuation or argument separator
+      if (token.type === 'PUNCTUATION' && (token.value === ')' || token.value === '}' || token.value === ']' || token.value === ',')) {
         break;
       }
 

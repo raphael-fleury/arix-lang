@@ -96,8 +96,10 @@ export function tokenize(source: string): Token[] {
   const indentStack: number[] = [0];
   let atLineStart = true;
   let currentLineIndent = 0;
+  let bracketDepth = 0; // No INDENT/DEDENT inside brackets (like Python)
 
   const emitIndentTokens = (newIndent: number) => {
+    if (bracketDepth > 0) return;
     const currentIndent = indentStack[indentStack.length - 1];
     
     if (newIndent > currentIndent) {
@@ -336,6 +338,8 @@ export function tokenize(source: string): Token[] {
 
     // Punctuation
     if (punctuation.has(char)) {
+      if (char === '(' || char === '[' || char === '{') bracketDepth++;
+      else if (char === ')' || char === ']' || char === '}') bracketDepth--;
       tokens.push({ type: 'PUNCTUATION', value: char, line, column });
       pos++;
       column++;
