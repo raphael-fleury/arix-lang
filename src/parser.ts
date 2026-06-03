@@ -584,6 +584,17 @@ class Parser {
     return this.parsePipe();
   }
 
+  private parseLambdaBody(): Node {
+    this.skipNewlines();
+    if (
+      this.current().type === 'INDENT' ||
+      (this.current().type === 'KEYWORD' && ['let', 'if', 'match', 'try'].includes(this.current().value))
+    ) {
+      return this.parseBlockBody();
+    }
+    return this.parseExpr();
+  }
+
   private parsePipe(): Node {
     let left = this.parseUnary();
     this.skipNewlines();
@@ -1180,8 +1191,14 @@ class Parser {
   private parseTupleOrParens(): Node {
     this.advance(); // consume '('
     
+    // Empty parens: () -> body is zero-param lambda, () is empty tuple
     if (this.current().value === ')') {
-      this.expect('PUNCTUATION', ')');
+      this.advance(); // consume ')'
+      if (this.current().value === '->') {
+        this.advance(); // consume '->'
+        const body = this.parseLambdaBody();
+        return { type: 'FunctionExpr', params: [], body } as FunctionExpr;
+      }
       return { type: 'TupleLiteral', elements: [] } as TupleLiteral;
     }
 
@@ -1190,14 +1207,29 @@ class Parser {
       return this.parseOperatorSection();
     }
 
-    // Try to parse as left-argument operator section first
-    // Check pattern: expr op ) by looking ahead
+    // Speculatively try to parse as lambda: (params) -> body
+    // This handles typed params like (x Int, y Int) -> x + y
     const savedPos = this.pos;
     try {
-      const first = this.parsePrimary(); // Parse just the primary, not full expr
+      const params = this.parseLambdaParams();
+      this.expect('PUNCTUATION', ')');
+      if (this.current().value === '->') {
+        this.advance(); // consume '->'
+        const body = this.parseLambdaBody();
+        return { type: 'FunctionExpr', params, body } as FunctionExpr;
+      }
+      // Not a lambda — reset and parse normally
+      this.pos = savedPos;
+    } catch (e) {
+      this.pos = savedPos;
+    }
+
+    // Try to parse as left-argument operator section: (expr op)
+    const savedPos2 = this.pos;
+    try {
+      const first = this.parsePrimary();
       
       if (this.current().type === 'OPERATOR' && this.peek(1).value === ')') {
-        // This is (expr op) pattern
         const operator = this.current().value;
         this.advance();
         this.expect('PUNCTUATION', ')');
@@ -1212,13 +1244,12 @@ class Parser {
         return { type: 'FunctionExpr', params: [param], body } as FunctionExpr;
       }
       
-      // Reset and parse as normal expression
-      this.pos = savedPos;
+      this.pos = savedPos2;
     } catch (e) {
-      // Reset on error
-      this.pos = savedPos;
+      this.pos = savedPos2;
     }
 
+    // Normal tuple or parenthesized expression
     const first = this.parseExpr();
 
     if (this.current().value === ',') {
@@ -1234,6 +1265,20 @@ class Parser {
 
     this.expect('PUNCTUATION', ')');
     return first;
+  }
+
+  private parseLambdaParams(): Param[] {
+    const params: Param[] = [];
+    while (this.current().value !== ')') {
+      const name = this.expect('IDENTIFIER').value;
+      let paramType: Node | undefined;
+      if (this.current().type === 'IDENTIFIER' || this.current().type === 'KEYWORD') {
+        paramType = this.parseType();
+      }
+      params.push({ type: 'Param', name, paramType });
+      if (this.current().value === ',') this.advance();
+    }
+    return params;
   }
 
   private parseOperatorSection(): Node {

@@ -377,4 +377,62 @@ describe('Parser', () => {
     expect(inst.methods.length).toBe(1);
     expect(inst.methods[0].name).toBe('eq');
   });
+
+  describe('Anonymous Functions (lambda syntax)', () => {
+    it('parses single-param lambda', () => {
+      const ast = parse('let f = (x) -> x * 2');
+      const letDecl = ast.body[0] as any;
+      expect(letDecl.value.type).toBe('FunctionExpr');
+      const fn = letDecl.value;
+      expect(fn.params.length).toBe(1);
+      expect(fn.params[0].name).toBe('x');
+      expect(fn.body.type).toBe('BinaryExpr');
+    });
+
+    it('parses multi-param lambda', () => {
+      const ast = parse('let f = (a, b) -> a + b');
+      const letDecl = ast.body[0] as any;
+      expect(letDecl.value.type).toBe('FunctionExpr');
+      const fn = letDecl.value;
+      expect(fn.params.length).toBe(2);
+      expect(fn.params[0].name).toBe('a');
+      expect(fn.params[1].name).toBe('b');
+    });
+
+    it('parses zero-param lambda', () => {
+      const ast = parse('let f = () -> 42');
+      const letDecl = ast.body[0] as any;
+      expect(letDecl.value.type).toBe('FunctionExpr');
+      expect(letDecl.value.params.length).toBe(0);
+      expect(letDecl.value.body.type).toBe('NumberLiteral');
+    });
+
+    it('parses lambda as function argument', () => {
+      const ast = parse('map(numbers, (x) -> x * 2)');
+      expect(ast.body[0].type).toBe('CallExpr');
+      const call = ast.body[0] as any;
+      expect(call.args.length).toBe(2);
+      expect(call.args[1].type).toBe('FunctionExpr');
+    });
+
+    it('parses higher-order lambda returning another lambda', () => {
+      const ast = parse('let f = (n) -> (x) -> x + n');
+      const letDecl = ast.body[0] as any;
+      expect(letDecl.value.type).toBe('FunctionExpr');
+      const outer = letDecl.value as any;
+      expect(outer.params.length).toBe(1);
+      expect(outer.body.type).toBe('FunctionExpr');
+      const inner = outer.body as any;
+      expect(inner.params.length).toBe(1);
+    });
+
+    it('parses lambda with complex body expression', () => {
+      const ast = parse('let f = (x) -> (x * 2) + (x / 3)');
+      const letDecl = ast.body[0] as any;
+      expect(letDecl.value.type).toBe('FunctionExpr');
+      const fn = letDecl.value;
+      expect(fn.body.type).toBe('BinaryExpr');
+      expect(fn.body.operator).toBe('+');
+    });
+  });
 });

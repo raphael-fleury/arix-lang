@@ -424,4 +424,60 @@ fn createStatus() = Status.Active`;
     const result = evalTranspiled(js);
     expect(result).toBe(true);
   });
+
+  describe('Anonymous Functions (lambda syntax)', () => {
+    it('transpiles single-param lambda', () => {
+      const ast = parse([
+        'fn main() =',
+        '  let f = (x) -> x * 2',
+        '  f(5)',
+      ].join('\n'));
+      const js = transpile(ast);
+      const result = eval(js + '\nmain()');
+      expect(result).toBe(10);
+    });
+
+    it('transpiles lambda passed as argument', () => {
+      const ast = parse([
+        'fn main() =',
+        '  [1, 2, 3].map((x) -> x * 2)',
+      ].join('\n'));
+      const js = transpile(ast);
+      const result = eval(js + '\nmain()');
+      expect(result).toEqual([2, 4, 6]);
+    });
+
+    it('transpiles higher-order lambda', () => {
+      const ast = parse([
+        'fn main() =',
+        '  let adder = (n) -> (x) -> x + n',
+        '  adder(5)(3)',
+      ].join('\n'));
+      const js = transpile(ast);
+      const result = eval(js + '\nmain()');
+      expect(result).toBe(8);
+    });
+
+    it('transpiles multi-param lambda', () => {
+      const ast = parse([
+        'fn main() =',
+        '  let f = (a, b) -> a + b',
+        '  f(3, 4)',
+      ].join('\n'));
+      const js = transpile(ast);
+      const result = eval(js + '\nmain()');
+      expect(result).toBe(7);
+    });
+
+    it('transpiles zero-param lambda', () => {
+      const ast = parse([
+        'fn main() =',
+        '  let f = () -> 42',
+        '  f()',
+      ].join('\n'));
+      const js = transpile(ast);
+      const result = eval(js + '\nmain()');
+      expect(result).toBe(42);
+    });
+  });
 });

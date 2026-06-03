@@ -194,6 +194,29 @@ fn greet(name) = "Hello, ${name}!"
 fn add(a Int, b Int) Int = a + b
 ```
 
+### 6.2 Anonymous Functions (Lambdas)
+```python
+# Single parameter
+let double = (x) -> x * 2
+
+# Multiple parameters
+let add = (a, b) -> a + b
+
+# Zero parameters
+let getAnswer = () -> 42
+
+# As function argument
+[1, 2, 3].map((x) -> x * 2)
+
+# Higher-order (returns another lambda)
+let makeAdder = (n) -> (x) -> x + n
+let addFive = makeAdder(5)
+addFive(3)  # 8
+
+# With type annotations
+let add = (a Int, b Int) Int -> a + b
+```
+
 ### 6.2 Currying (Optional)
 ```python
 # All equivalent:
@@ -742,6 +765,7 @@ stmt          ::= letDecl | fnDecl | typeDecl | importStmt | expr
 
 letDecl       ::= 'let' ['mut'] pattern ['??' expr] '=' expr
 fnDecl        ::= ['public' | 'internal'] 'async'? 'fn' pattern params? ['->' type] ['where' constraints] '=' expr
+lambdaExpr    ::= '(' params ')' '->' expr
 pattern       ::= identifier | recordPat | tuplePat | listPat | typePat
 recordPat     ::= '{' (pattern (',' pattern)*)? ['..' ident]? '}'
 tuplePat      ::= '(' pattern (',' pattern)* ')'
