@@ -2,7 +2,11 @@
 List utilities for working with immutable lists.
 """
 
-import maybe
+import maybe(Maybe, Some, None)
+import monoid(Monoid)
+import functor(Functor)
+import applicative(Applicative)
+import monad(Monad)
 
 public fn head(xs) =
     match xs:
@@ -24,3 +28,18 @@ public fn isEmpty(xs) =
     match xs:
         [] -> true
         _ -> false
+
+impl Monoid for List
+    empty(x) = []
+    combine(x, y) = x.concat(y)
+
+impl Functor for List
+    map(x, f) = x.map(f)
+
+impl Applicative for List
+    pure(x, value) = [value]
+    apply(x, ff) = ff.flatMap((f) -> x.map((v) -> f(v)))
+
+impl Monad for List
+    pureM(x, value) = [value]
+    flatMap(x, f) = x.flatMap(f)

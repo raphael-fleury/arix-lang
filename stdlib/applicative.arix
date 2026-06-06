@@ -1,11 +1,7 @@
 """
-Applicative typeclass and stdlib instances.
+Applicative typeclass.
 """
 
 typeclass Applicative(f)
   pure(x f(a), value a) -> f(a)
   apply(x f(a), ff) -> f(b)
-
-impl Applicative for List
-  pure(x, value) = [value]
-  apply(x, ff) = ff.flatMap((f) -> x.map((v) -> f(v)))

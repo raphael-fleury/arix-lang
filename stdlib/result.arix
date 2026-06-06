@@ -1,14 +1,9 @@
+import monoid(Monoid)
+import functor(Functor)
+import applicative(Applicative)
+import monad(Monad)
+
 type Result(a, e) = Ok(value: a) | Err(error: e)
-
-public fn map(result, f) =
-    match result:
-        Ok(v) -> Ok(f(v))
-        Err(e) -> Err(e)
-
-public fn flatMap(result, f) =
-    match result:
-        Ok(v) -> f(v)
-        Err(e) -> Err(e)
 
 public fn getOrElse(result, defaultValue) =
     match result:
@@ -19,3 +14,30 @@ public fn isOk(result) =
     match result:
         Ok(_) -> true
         Err(_) -> false
+
+impl Monoid for Result
+    empty(x) = Err(null)
+    combine(x, y) =
+        match x:
+            Ok(_) -> x
+            Err(_) -> y
+
+impl Functor for Result
+    map(x, f) =
+        match x:
+            Ok(v) -> Ok(f(v))
+            Err(e) -> Err(e)
+
+impl Applicative for Result
+    pure(x, value) = Ok(value)
+    apply(x, ff) =
+        match ff:
+            Ok(f) -> map(x, f)
+            Err(e) -> Err(e)
+
+impl Monad for Result
+    pureM(x, value) = Ok(value)
+    flatMap(x, f) =
+        match x:
+            Ok(v) -> f(v)
+            Err(e) -> Err(e)

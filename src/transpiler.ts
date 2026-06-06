@@ -91,6 +91,14 @@ export class Transpiler {
     // Merge global typeclasses with local ones (local takes precedence)
     this.typeclasses = new Map(this.globalTypeclasses);
 
+    // Pre-register top-level function signatures so dispatch generation can avoid name clashes.
+    for (const node of ast.body) {
+      if (node.type === 'FunctionDecl') {
+        const fn = node as FunctionDecl;
+        this.functions.set(fn.name, fn.params.length);
+      }
+    }
+
     // First pass: register all typeclasses and instances for default implementations
     let firstPassInstanceCounter = 0;
     for (const node of ast.body) {
@@ -409,10 +417,28 @@ export class Transpiler {
       const jsPath = `./${moduleNameLower}.js`;
       const moduleInfo = this.moduleInfoMap.get(node.module);
 
-      if (moduleInfo && moduleInfo.exports.length > 0) {
-        const itemsStr = moduleInfo.exports.join(', ');
+      if (node.alias) {
+        const alias = this.sanitizeModuleName(node.alias);
+        this.esmImports.push(`import * as ${alias} from '${jsPath}';`);
+        this.importedNames.set(alias, alias);
+        this.constructors.set(alias, alias);
+        return;
+      }
+
+      let importItems = moduleInfo?.exports ? [...moduleInfo.exports] : [];
+
+      if (node.items && node.items.length > 0) {
+        importItems = [...node.items];
+      }
+
+      if (node.hiding && node.hiding.length > 0) {
+        importItems = importItems.filter(item => !node.hiding!.includes(item));
+      }
+
+      if (importItems.length > 0) {
+        const itemsStr = importItems.join(', ');
         this.esmImports.push(`import { ${itemsStr} } from '${jsPath}';`);
-        for (const item of moduleInfo.exports) {
+        for (const item of importItems) {
           this.importedNames.set(item, '');
           this.constructors.set(item, item);
         }
@@ -917,13 +943,6 @@ export class Transpiler {
   private transpileTypeclassDecl(node: TypeclassDecl): void {
     this.exports.push(node.name);
     
-    // Export method dispatch functions so they can be imported from other modules.
-    for (const method of node.methods) {
-      if (!this.exports.includes(method.name)) {
-        this.exports.push(method.name);
-      }
-    }
-    
     // Generate default implementations for methods with bodies
     for (const method of node.methods) {
       if (method.body) {
@@ -1058,9 +1077,18 @@ export class Transpiler {
       // For each method in the typeclass, create a dispatch function
       for (const method of tc.methods) {
         const methodName = method.name;
+
+        // Keep an existing top-level function when a module defines one with the same name.
+        if (this.functions.has(methodName)) {
+          continue;
+        }
         
         // Register this method name as a local function (empty string means no namespace)
         this.importedNames.set(methodName, '');
+
+        if (!this.exports.includes(methodName)) {
+          this.exports.push(methodName);
+        }
         
         // Extract parameter names from the method signature
         const paramNames = method.params.map(p => {

@@ -2,17 +2,12 @@
 Maybe - optional value type.
 """
 
+import monoid(Monoid)
+import functor(Functor)
+import applicative(Applicative)
+import monad(Monad)
+
 type Maybe(a) = Some(value: a) | None
-
-public fn map(value, f) =
-    match value:
-        Some(v) -> Some(f(v))
-        None -> None
-
-public fn flatMap(value, f) =
-    match value:
-        Some(v) -> f(v)
-        None -> None
 
 public fn getOrElse(value, defaultValue) =
     match value:
@@ -23,3 +18,30 @@ public fn isSome(value) =
     match value:
         Some(_) -> true
         None -> false
+
+impl Monoid for Maybe
+    empty(x) = None
+    combine(x, y) =
+        match x:
+            Some(_) -> x
+            None -> y
+
+impl Functor for Maybe
+    map(x, f) =
+        match x:
+            Some(v) -> Some(f(v))
+            None -> None
+
+impl Applicative for Maybe
+    pure(x, value) = Some(value)
+    apply(x, ff) =
+        match ff:
+            Some(f) -> map(x, f)
+            None -> None
+
+impl Monad for Maybe
+    pureM(x, value) = Some(value)
+    flatMap(x, f) =
+        match x:
+            Some(v) -> f(v)
+            None -> None

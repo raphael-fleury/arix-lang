@@ -15,10 +15,6 @@ impl Monoid for String
   empty(x) = ""
   combine(x, y) = x ++ y
 
-impl Monoid for List
-  empty(x) = []
-  combine(x, y) = x.concat(y)
-
 impl Monoid for Int
   empty(x) = 0
   combine(x, y) = x + y

@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from
 import { join, dirname, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tokenize } from './lexer.js';
-import { FunctionDecl, TypeDecl, TypeclassDecl, ImportStmt } from './ast.js';
+import { FunctionDecl, TypeDecl, TypeclassDecl, ImportStmt, InstanceDecl } from './ast.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -201,12 +201,15 @@ function collectModuleInfo(arixFile: string): ModuleInfo {
     if (node.type === 'TypeclassDecl') {
       const tc = node as TypeclassDecl;
       exports.push(tc.name);
-      for (const method of tc.methods) {
-        exports.push(method.name);
-      }
     }
     if (node.type === 'InstanceDecl') {
-      // Instances are not directly exported by name, but they provide implementations
+      const inst = node as InstanceDecl;
+      // Instance methods are generated as dispatch functions and should be importable.
+      for (const method of inst.methods) {
+        if (!exports.includes(method.name)) {
+          exports.push(method.name);
+        }
+      }
     }
     if (node.type === 'ImportStmt') {
       const imp = node as ImportStmt;

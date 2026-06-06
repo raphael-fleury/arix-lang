@@ -1,5 +1,5 @@
 """
-Monad typeclass and stdlib instances.
+Monad typeclass.
 """
 
 typeclass Monad(m)
@@ -7,7 +7,3 @@ typeclass Monad(m)
   flatMap(x m(a), f) -> m(b)
   mapM(x m(a), f) -> m(b) = flatMap(x, (v) -> pureM(x, f(v)))
   flatten(x m(m(a))) -> m(a) = flatMap(x, (v) -> v)
-
-impl Monad for List
-  pureM(x, value) = [value]
-  flatMap(x, f) = x.flatMap(f)
