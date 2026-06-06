@@ -917,6 +917,13 @@ export class Transpiler {
   private transpileTypeclassDecl(node: TypeclassDecl): void {
     this.exports.push(node.name);
     
+    // Export method dispatch functions so they can be imported from other modules.
+    for (const method of node.methods) {
+      if (!this.exports.includes(method.name)) {
+        this.exports.push(method.name);
+      }
+    }
+    
     // Generate default implementations for methods with bodies
     for (const method of node.methods) {
       if (method.body) {

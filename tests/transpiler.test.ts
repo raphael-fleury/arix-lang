@@ -269,6 +269,19 @@ fn createStatus() = Status.Active`;
     expect(result.show).toBeNull();
   });
 
+  it('exports typeclass dispatch methods', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'fn main() = show(42)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    expect(js).toMatch(/export \{[^}]*Show[^}]*show[^}]*\};/);
+  });
+
   it('transpiles instance declaration', () => {
     const src = [
       'typeclass Show(a)',

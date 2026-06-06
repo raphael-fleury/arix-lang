@@ -1,0 +1,24 @@
+"""
+Monoid typeclass and core instances for stdlib types.
+
+Note: `empty` receives a witness value so dispatch can choose the correct instance.
+"""
+
+typeclass Monoid(a)
+  empty(x a) -> a
+  combine(x a, y a) -> a
+  mconcat(x a, xs List(a)) -> a = match xs:
+    [] -> empty(x)
+    [h | t] -> combine(h, mconcat(x, t))
+
+impl Monoid for String
+  empty(x) = ""
+  combine(x, y) = x ++ y
+
+impl Monoid for List
+  empty(x) = []
+  combine(x, y) = x.concat(y)
+
+impl Monoid for Int
+  empty(x) = 0
+  combine(x, y) = x + y

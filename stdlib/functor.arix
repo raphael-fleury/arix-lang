@@ -1,0 +1,9 @@
+"""
+Functor typeclass and stdlib instances.
+"""
+
+typeclass Functor(f)
+  map(x f(a), f) -> f(b)
+
+impl Functor for List
+  map(x, f) = x.map(f)
