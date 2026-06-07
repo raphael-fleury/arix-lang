@@ -637,10 +637,12 @@ class Parser {
     this.skipNewlines();
 
     const precedences: Record<string, number> = {
+      '$': 0,
       '|>': 0,
       '||': 1, '&&': 2, '==': 3, '!=': 3, '<': 4, '>': 4, '<=': 4, '>=': 4,
-      '+': 5, '-': 5, '*': 6, '/': 6, '%': 6, '++': 7,
+      '+': 5, '-': 5, '*': 6, '/': 6, '%': 6, '++': 7, '.': 8,
     };
+    const rightAssociative = new Set(['$', '.']);
 
     while (true) {
       this.skipNewlines();
@@ -654,7 +656,7 @@ class Parser {
         const right = this.parseCall();
         left = { type: 'PipeExpr', left, right } as PipeExpr;
       } else {
-        const nextPrecedence = precedence + 1;
+        const nextPrecedence = rightAssociative.has(operator) ? precedence : precedence + 1;
         const right = this.parseBinaryWithPrecedence(nextPrecedence);
         left = { type: 'BinaryExpr', operator, left, right } as BinaryExpr;
       }
@@ -676,7 +678,7 @@ class Parser {
         }
         this.expect('PUNCTUATION', ')');
         expr = { type: 'CallExpr', callee: expr, args } as CallExpr;
-      } else if (this.current().value === '.') {
+      } else if (this.current().type === 'PUNCTUATION' && this.current().value === '.') {
         this.advance();
         const propertyToken = this.expect('IDENTIFIER');
         const property = { type: 'Identifier' as const, name: propertyToken.value };

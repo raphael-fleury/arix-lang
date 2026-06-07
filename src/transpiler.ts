@@ -621,6 +621,13 @@ export class Transpiler {
         const bin = node as BinaryExpr;
         const left = this.transpileExpr(bin.left);
         const right = this.transpileExpr(bin.right);
+
+        if (bin.operator === '$') {
+          return `${left}(${right})`;
+        }
+        if (bin.operator === '.') {
+          return `((..._args) => ${left}(${right}(..._args)))`;
+        }
         
         if (bin.operator === '||') {
           return `(${left} || ${right})`;

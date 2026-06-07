@@ -98,6 +98,24 @@ describe('Parser', () => {
     expect(letDecl.value.left.type).toBe('PipeExpr');
   });
 
+  it('parses $ as right-associative function application operator', () => {
+    const ast = parse('let y = print $ f $ x');
+    const letDecl = ast.body[0] as any;
+    expect(letDecl.value.type).toBe('BinaryExpr');
+    expect(letDecl.value.operator).toBe('$');
+    expect(letDecl.value.right.type).toBe('BinaryExpr');
+    expect(letDecl.value.right.operator).toBe('$');
+  });
+
+  it('parses . as function composition operator', () => {
+    const ast = parse('let c = f . g');
+    const letDecl = ast.body[0] as any;
+    expect(letDecl.value.type).toBe('BinaryExpr');
+    expect(letDecl.value.operator).toBe('.');
+    expect(letDecl.value.left.type).toBe('Identifier');
+    expect(letDecl.value.right.type).toBe('Identifier');
+  });
+
   it('parses for loops - simple iteration', () => {
     const ast = parse('for x in [1, 2, 3]:\n    print(x)');
     expect(ast.body[0].type).toBe('ForExpr');

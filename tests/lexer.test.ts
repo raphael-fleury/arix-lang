@@ -41,20 +41,20 @@ describe('Lexer', () => {
   it('rejects multiple dots in numbers', () => {
     const tokens = tokenize('1.2.3');
     const numbers = tokens.filter(t => t.type === 'NUMBER').map(t => t.value);
-    const punctuation = tokens.filter(t => t.type === 'PUNCTUATION').map(t => t.value);
+    const operators = tokens.filter(t => t.type === 'OPERATOR').map(t => t.value);
     
-    // Should tokenize as: NUMBER(1.2) + PUNCTUATION(.) + NUMBER(3)
+    // Should tokenize as: NUMBER(1.2) + OPERATOR(.) + NUMBER(3)
     expect(numbers).toEqual(['1.2', '3']);
-    expect(punctuation).toContain('.');
+    expect(operators).toContain('.');
   });
 
-  it('handles trailing dot as punctuation', () => {
+  it('handles trailing dot as operator', () => {
     const tokens = tokenize('1.');
     const numbers = tokens.filter(t => t.type === 'NUMBER').map(t => t.value);
-    const punctuation = tokens.filter(t => t.type === 'PUNCTUATION').map(t => t.value);
+    const operators = tokens.filter(t => t.type === 'OPERATOR').map(t => t.value);
     
     expect(numbers).toEqual(['1']);
-    expect(punctuation).toEqual(['.']);
+    expect(operators).toEqual(['.']);
   });
 
   it('processes escape sequences in strings', () => {
@@ -133,14 +133,24 @@ describe('Lexer', () => {
     expect(keywords).toEqual(['true', 'false']);
   });
 
-  it('does not tokenize .. or ... as operators', () => {
+  it('tokenizes dot as an operator', () => {
     const tokens = tokenize('a . b');
     const nonPunct = tokens.filter(t => t.type !== 'NEWLINE' && t.type !== 'EOF' && t.value !== '');
-    // Should tokenize as: identifier, punctuation(.), identifier
+    // Should tokenize as: identifier, operator(.), identifier
     expect(nonPunct.map(t => [t.type, t.value])).toEqual([
       ['IDENTIFIER', 'a'],
-      ['PUNCTUATION', '.'],
+      ['OPERATOR', '.'],
       ['IDENTIFIER', 'b'],
+    ]);
+  });
+
+  it('tokenizes tight dot as punctuation for member access', () => {
+    const tokens = tokenize('obj.field');
+    const nonEmptyTokens = nonEmpty(tokens).filter(t => t.value !== '');
+    expect(nonEmptyTokens.map(t => [t.type, t.value])).toEqual([
+      ['IDENTIFIER', 'obj'],
+      ['PUNCTUATION', '.'],
+      ['IDENTIFIER', 'field'],
     ]);
   });
 

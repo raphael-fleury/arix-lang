@@ -33,14 +33,14 @@ export const OPERATORS = [
   '==', '!=', '<', '>', '<=', '>=', // Comparison
   '&&', '||', '!', // Logical
   '++', '+=', '-=', '*=', '/=', '??=', // Mutation
-  '=', '!!', '??', '->', '=>', '|>', // Other
+  '=', '!!', '??', '->', '=>', '|>', '$', '.', // Other
 ] as const;
 
 // Operators sorted by length (descending) for greedy matching
 const OPERATORS_BY_LENGTH = [...OPERATORS].sort((a, b) => b.length - a.length);
 
 export const PUNCTUATION = [
-  '(', ')', '[', ']', '{', '}', ',', ':', ';', '.', '|',
+  '(', ')', '[', ']', '{', '}', ',', ':', ';', '|',
 ] as const;
 
 // Map of escape sequences to their actual characters
@@ -319,6 +319,17 @@ export function tokenize(source: string): Token[] {
         tokens.push({ type: 'RELATIVE', value: '../', line, column });
         pos += 3;
         column += 3;
+        continue;
+      }
+
+      const prevChar = pos > 0 ? source[pos - 1] : '';
+      const nextChar = pos + 1 < source.length ? source[pos + 1] : '';
+      const isTightMemberAccess = /\S/.test(prevChar) && /[a-zA-Z_]/.test(nextChar) && !/[0-9]/.test(prevChar);
+
+      if (isTightMemberAccess) {
+        tokens.push({ type: 'PUNCTUATION', value: '.', line, column });
+        pos++;
+        column++;
         continue;
       }
     }

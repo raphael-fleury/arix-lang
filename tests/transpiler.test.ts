@@ -134,6 +134,20 @@ describe('Transpiler', () => {
     expect(js).toContain('length');
   });
 
+  it('transpiles $ as function application', () => {
+    const ast = parse('fn inc(x) = x + 1\nfn main() = inc $ 41');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(42);
+  });
+
+  it('transpiles . as function composition', () => {
+    const ast = parse('fn f(x) = x + 1\nfn g(x) = x * 2\nfn main() = (f . g)(3)');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(7);
+  });
+
   it('transpiles record literal as statement', () => {
     const ast = parse('fn main() = { x: 10, y: 20 }');
     const js = transpile(ast);
