@@ -255,6 +255,7 @@ export interface ImportStmt extends Node {
   items?: string[];
   alias?: string;
   hiding?: string[];
+  implicit?: boolean;
 }
 
 export interface TypeDecl extends Node {

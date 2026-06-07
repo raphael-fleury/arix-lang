@@ -42,6 +42,8 @@ import type {
 const RUNTIME_IMPORT = (relativePath: string) => 
   `import { createADT, print } from '${relativePath}';`;
 
+const STDLIB_MODULES = ['result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+
 interface GlobalInstanceInfo {
   typeclass: string;
   forTypes: string[];
@@ -98,6 +100,9 @@ export class Transpiler {
     this.currentFilePath = filePath;
     this.needsRuntime = false;
 
+    const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
+    const implicitStdlibImports = this.getImplicitStdlibImports(explicitImports);
+
     // Merge global typeclasses with local ones (local takes precedence)
     this.typeclasses = new Map(this.globalTypeclasses);
 
@@ -110,6 +115,10 @@ export class Transpiler {
       if (node.type === 'ImportStmt') {
         this.registerImportNamespace(node as ImportStmt);
       }
+    }
+
+    for (const importNode of implicitStdlibImports) {
+      this.registerImportNamespace(importNode);
     }
 
     // First pass: register all typeclasses and instances for default implementations
@@ -160,6 +169,10 @@ export class Transpiler {
     }
 
     // Fourth: transpile everything else
+    for (const importNode of implicitStdlibImports) {
+      this.transpileImportStmt(importNode);
+    }
+
     for (const node of ast.body) {
       if (node.type !== 'TypeclassDecl' && node.type !== 'InstanceDecl') {
         this.transpileNode(node);
@@ -440,13 +453,23 @@ export class Transpiler {
   }
 
   private transpileImportStmt(node: ImportStmt): void {
-    const stdlibModules = ['result', 'maybe', 'list', 'show'];
     const moduleNameLower = node.module.toLowerCase();
     const namespace = this.getImportNamespace(node);
 
-    if (stdlibModules.includes(moduleNameLower)) {
+    if (STDLIB_MODULES.includes(moduleNameLower)) {
       const jsPath = `./${moduleNameLower}.js`;
       const moduleInfo = this.moduleInfoMap.get(node.module);
+
+      if (node.implicit) {
+        this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
+        const exportItems = (moduleInfo?.exports || []).filter(item => !this.isGeneratedDispatchMethod(item));
+        for (const item of exportItems) {
+          if (!this.importedNames.has(item)) {
+            this.importedNames.set(item, namespace);
+          }
+        }
+        return;
+      }
 
       if (node.alias) {
         this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
@@ -520,7 +543,7 @@ export class Transpiler {
 
   private registerImportNamespace(node: ImportStmt): void {
     const moduleNameLower = node.module.toLowerCase();
-    const isStdlibModule = ['result', 'maybe', 'list', 'show'].includes(moduleNameLower);
+    const isStdlibModule = STDLIB_MODULES.includes(moduleNameLower);
     if (!isStdlibModule) {
       return;
     }
@@ -550,6 +573,31 @@ export class Transpiler {
     if (!this.esmImports.includes(importLine)) {
       this.esmImports.push(importLine);
     }
+  }
+
+  private getImplicitStdlibImports(explicitImports: ImportStmt[]): ImportStmt[] {
+    if (!this.currentFilePath || this.isStdlibSourceFile(this.currentFilePath)) {
+      return [];
+    }
+
+    const explicitStdlibModules = new Set(
+      explicitImports
+        .map(imp => imp.module.toLowerCase())
+        .filter(moduleName => STDLIB_MODULES.includes(moduleName))
+    );
+
+    return STDLIB_MODULES
+      .filter(moduleName => !explicitStdlibModules.has(moduleName))
+      .map(moduleName => ({
+        type: 'ImportStmt',
+        module: moduleName,
+        isRelative: false,
+        implicit: true,
+      }));
+  }
+
+  private isStdlibSourceFile(filePath: string): boolean {
+    return /[\\/]stdlib[\\/]/.test(filePath);
   }
 
   private getModuleName(modulePath: string): string {

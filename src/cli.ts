@@ -13,6 +13,7 @@ const __dirname = dirname(__filename);
 const RUNTIME_SOURCE = join(__dirname, '..', 'runtime', 'arix-runtime.js');
 
 const STD_LIB_DIR = join(__dirname, '..', 'stdlib');
+const STDLIB_MODULES = ['result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
 
 interface ModuleInfo {
   filePath: string;
@@ -267,6 +268,21 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
   }
 
   collectModule(entryFile);
+
+  for (const moduleName of STDLIB_MODULES) {
+    const stdlibFile = join(STD_LIB_DIR, moduleName + '.arix');
+    if (!existsSync(stdlibFile)) {
+      continue;
+    }
+    if (!fileToModuleSpecifier.has(stdlibFile)) {
+      fileToModuleSpecifier.set(stdlibFile, moduleName);
+    }
+    collectModule(stdlibFile);
+    const stdlibInfo = moduleInfoMap.get(stdlibFile);
+    if (stdlibInfo) {
+      moduleNameToInfo.set(moduleName, stdlibInfo);
+    }
+  }
 
   // Collect all typeclasses from all files
   function collectTypeclasses(): Map<string, TypeclassDecl> {
