@@ -2,9 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { transpile } from '../src/transpiler.js';
 import { parse } from '../src/parser.js';
 
+function normalizeListValue(value: unknown): unknown {
+  if (value && typeof value === 'object' && (value as any)._type === 'List') {
+    const result: unknown[] = [];
+    let current: any = value;
+    while (current && current._variant === 'Cons') {
+      result.push(normalizeListValue(current.head));
+      current = current.tail;
+    }
+    return result;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(v => normalizeListValue(v));
+  }
+
+  return value;
+}
+
 function evalTranspiled(js: string, mainCall = true): unknown {
   const code = js.replace(/export\s*\{[^}]*\};?/g, '');
-  return eval(code + (mainCall ? '\nmain()' : ''));
+  return normalizeListValue(eval(code + (mainCall ? '\nmain()' : '')));
 }
 
 describe('Transpiler', () => {
@@ -37,9 +55,9 @@ describe('Transpiler', () => {
   });
 
   it('transpiles section operator', () => {
-    const ast = parse('fn main() = [1, 2, 3].map(* 2)');
+    const ast = parse('fn map(f, xs) = [f(x) for x in xs]\nfn main() = map(* 2, [1, 2, 3])');
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([2, 4, 6]);
   });
 
@@ -85,7 +103,7 @@ describe('Transpiler', () => {
   it('transpiles list comprehension', () => {
     const ast = parse('fn main() = [x * 2 for x in [1, 2, 3, 4, 5] if x > 2]');
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([6, 8, 10]);
   });
 
@@ -126,7 +144,7 @@ describe('Transpiler', () => {
   it('transpiles list literal as statement', () => {
     const ast = parse('fn main() = [1, 2, 3]');
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([1, 2, 3]);
   });
 
@@ -245,7 +263,7 @@ fn createStatus() = Status.Active`;
   it('transpiles function with generic type annotations', () => {
     const ast = parse('fn process(nums List(Int)) -> List(Int) = [x * 2 for x in nums]\nfn main() = process([1, 2, 3])');
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([2, 4, 6]);
   });
 
@@ -298,10 +316,11 @@ fn createStatus() = Status.Active`;
 
   it('dispatches typeclass methods by runtime type of the first argument', () => {
     const src = [
+      'fn listMap(x, f) = [f(v) for v in x]',
       'typeclass Mapper(a)',
       '  map(x a, f) -> a',
       'impl Mapper for List',
-      '  map(x, f) = x.map(f)',
+      '  map(x, f) = listMap(x, f)',
       'impl Mapper for String',
       '  map(x, f) = f(x)',
       'fn main() = [map([1, 2, 3], (x) -> x * 2), map("ok", (x) -> x ++ "!")]',
@@ -314,10 +333,18 @@ fn createStatus() = Status.Active`;
 
   it('dispatches flatMap-like methods by runtime type of the first argument', () => {
     const src = [
+      'fn append(a, b) =',
+      '  match a:',
+      '    [] -> b',
+      '    [h | t] -> [h | append(t, b)]',
+      'fn listFlatMap(x, f) =',
+      '  match x:',
+      '    [] -> []',
+      '    [h | t] -> append(f(h), listFlatMap(t, f))',
       'typeclass Chain(a)',
       '  flatMap(x a, f) -> a',
       'impl Chain for List',
-      '  flatMap(x, f) = x.flatMap(f)',
+      '  flatMap(x, f) = listFlatMap(x, f)',
       'impl Chain for String',
       '  flatMap(x, f) = f(x)',
       'fn main() = [flatMap([1, 2], (x) -> [x, x + 10]), flatMap("ha", (x) -> x ++ x)]',
@@ -333,7 +360,7 @@ fn createStatus() = Status.Active`;
       'typeclass Mapper(a)',
       '  map(x a, f) -> a',
       'impl Mapper for List',
-      '  map(x, f) = x.map(f)',
+      '  map(x, f) = x',
       'fn main() = map(true, (x) -> x)',
     ].join('\n');
     const ast = parse(src);
@@ -497,11 +524,12 @@ fn createStatus() = Status.Active`;
 
     it('transpiles lambda passed as argument', () => {
       const ast = parse([
+        'fn map(f, xs) = [f(x) for x in xs]',
         'fn main() =',
-        '  [1, 2, 3].map((x) -> x * 2)',
+        '  map((x) -> x * 2, [1, 2, 3])',
       ].join('\n'));
       const js = transpile(ast);
-      const result = eval(js + '\nmain()');
+      const result = normalizeListValue(eval(js + '\nmain()'));
       expect(result).toEqual([2, 4, 6]);
     });
 

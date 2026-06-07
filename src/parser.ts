@@ -1059,17 +1059,12 @@ class Parser {
       return { type: 'ListLiteral', elements: [] } as ListLiteral;
     }
 
-    // Check for list comprehension or pattern with rest
+    // Tail-only sugar: [|xs] desugars to xs
     if (this.current().value === '|') {
-      const elements: Node[] = [];
       this.advance();
       const rest = this.parseExpr();
       this.expect('PUNCTUATION', ']');
-      return { 
-        type: 'CallExpr', 
-        callee: { type: 'MemberExpr', object: { type: 'Identifier', name: 'List' }, property: { type: 'Identifier', name: 'cons' }, computed: false },
-        args: [rest]
-      } as CallExpr;
+      return rest;
     }
 
     // Parse first element
@@ -1088,12 +1083,15 @@ class Parser {
         this.advance();
         const rest = this.parseExpr();
         this.expect('PUNCTUATION', ']');
-        const head: Node = elements.length === 1 ? elements[0] : { type: 'ListLiteral', elements } as ListLiteral;
-        return { 
-          type: 'CallExpr', 
-          callee: { type: 'MemberExpr', object: { type: 'Identifier', name: 'List' }, property: { type: 'Identifier', name: 'cons' }, computed: false },
-          args: [head, rest]
-        } as CallExpr;
+        let acc: Node = rest;
+        for (let i = elements.length - 1; i >= 0; i--) {
+          acc = {
+            type: 'CallExpr',
+            callee: { type: 'Identifier', name: 'Cons' } as Identifier,
+            args: [elements[i], acc],
+          } as CallExpr;
+        }
+        return acc;
       }
       if (this.current().value === ',') {
         this.advance();

@@ -8,6 +8,13 @@ import functor(Functor)
 import applicative(Applicative)
 import monad(Monad)
 
+type List(a) = Nil | Cons(head: a, tail: List(a))
+
+fn append(xs, ys) =
+    match xs:
+        [] -> ys
+        [h | t] -> [h | append(t, ys)]
+
 public fn head(xs) =
     match xs:
         [] -> None
@@ -31,15 +38,24 @@ public fn isEmpty(xs) =
 
 impl Monoid for List
     empty(x) = []
-    combine(x, y) = x.concat(y)
+    combine(x, y) = append(x, y)
 
 impl Functor for List
-    map(x, f) = x.map(f)
+    map(x, f) =
+        match x:
+            [] -> []
+            [h | t] -> [f(h) | map(t, f)]
 
 impl Applicative for List
     pure(x, value) = [value]
-    apply(x, ff) = ff.flatMap((f) -> x.map((v) -> f(v)))
+    apply(x, ff) =
+        match ff:
+            [] -> []
+            [f | fs] -> append(map(x, f), apply(x, fs))
 
 impl Monad for List
     pureM(x, value) = [value]
-    flatMap(x, f) = x.flatMap(f)
+    flatMap(x, f) =
+        match x:
+            [] -> []
+            [h | t] -> append(f(h), flatMap(t, f))
