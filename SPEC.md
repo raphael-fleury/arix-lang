@@ -575,13 +575,14 @@ import ../shared (formatDate)
 import result
 import option
 import list
+import show
 ```
 
 ### 11.3 Module Resolution
 ```
 1. Relative imports (./foo, ../foo) → ./foo.arix
 2. Named imports (foo-bar) → {src,root}/foo-bar.arix
-3. Stdlib (result, option, list) → built-in runtime
+3. Stdlib (result, option, list, show) → built-in runtime
 ```
 
 ### 11.4 Visibility

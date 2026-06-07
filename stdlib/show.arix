@@ -1,0 +1,18 @@
+"""
+Show typeclass and core instances for stdlib types.
+"""
+
+typeclass Show(a)
+  show(x a) -> String
+
+impl Show for Int
+  show(x) = x.toString()
+
+impl Show for Float
+  show(x) = x.toString()
+
+impl Show for Boolean
+  show(x) = x.toString()
+
+impl Show for String
+  show(x) = x

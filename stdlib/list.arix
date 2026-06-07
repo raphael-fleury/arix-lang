@@ -7,6 +7,7 @@ import monoid(Monoid)
 import functor(Functor)
 import applicative(Applicative)
 import monad(Monad)
+import show(Show, show)
 
 type List(a) = Nil | Cons(head: a, tail: List(a))
 
@@ -36,6 +37,11 @@ public fn isEmpty(xs) =
         [] -> true
         _ -> false
 
+fn showListTail(xs) =
+    match xs:
+        [] -> "]"
+        [h | t] -> ", " ++ show(h) ++ showListTail(t)
+
 impl Monoid for List
     empty(x) = []
     combine(x, y) = append(x, y)
@@ -59,3 +65,9 @@ impl Monad for List
         match x:
             [] -> []
             [h | t] -> append(f(h), flatMap(t, f))
+
+impl Show for List
+    show(x) =
+        match x:
+            [] -> "[]"
+            [h | t] -> "[" ++ show(h) ++ showListTail(t)

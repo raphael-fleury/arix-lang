@@ -440,7 +440,7 @@ export class Transpiler {
   }
 
   private transpileImportStmt(node: ImportStmt): void {
-    const stdlibModules = ['result', 'maybe', 'list'];
+    const stdlibModules = ['result', 'maybe', 'list', 'show'];
     const moduleNameLower = node.module.toLowerCase();
     const namespace = this.getImportNamespace(node);
 
@@ -520,7 +520,7 @@ export class Transpiler {
 
   private registerImportNamespace(node: ImportStmt): void {
     const moduleNameLower = node.module.toLowerCase();
-    const isStdlibModule = ['result', 'maybe', 'list'].includes(moduleNameLower);
+    const isStdlibModule = ['result', 'maybe', 'list', 'show'].includes(moduleNameLower);
     if (!isStdlibModule) {
       return;
     }
@@ -663,12 +663,14 @@ export class Transpiler {
       case 'CallExpr': {
         const call = node as CallExpr;
         let calleeStr = this.transpileExpr(call.callee);
+        let isPrintCall = false;
         
         // Detect print() usage and mark runtime as needed
         if (call.callee.type === 'Identifier') {
           const funcName = (call.callee as Identifier).name;
           if (funcName === 'print') {
             this.needsRuntime = true;
+            isPrintCall = true;
           }
         }
         
@@ -681,6 +683,10 @@ export class Transpiler {
         
         const args = call.args.map(a => this.transpileExpr(a)).join(', ');
         const argCount = call.args.length;
+
+        if (isPrintCall && call.args.length === 1 && this.isShowAvailable()) {
+          return `${calleeStr}(show(${args}))`;
+        }
         
         // Check for currying: if calling a known function with fewer args than params
         if (call.callee.type === 'Identifier') {
@@ -1188,6 +1194,10 @@ export class Transpiler {
       return typeNode.callee.name; // Return 'List' from List(a)
     }
     return 'unknown';
+  }
+
+  private isShowAvailable(): boolean {
+    return this.importedNames.has('show') || this.functions.has('show');
   }
 
   private isGeneratedDispatchMethod(name: string): boolean {

@@ -314,6 +314,19 @@ fn createStatus() = Status.Active`;
     expect(result).toBe('42');
   });
 
+  it('routes print through show when Show is available', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'fn main() = print(42)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    expect(js).toContain('print(show(42))');
+  });
+
   it('dispatches typeclass methods by runtime type of the first argument', () => {
     const src = [
       'fn listMap(x, f) = [f(v) for v in x]',
