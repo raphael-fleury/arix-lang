@@ -20,6 +20,24 @@ interface ModuleInfo {
   imports: string[];
 }
 
+interface GlobalInstanceInfo {
+  typeclass: string;
+  forTypes: string[];
+  methods: string[];
+  module: string;
+}
+
+function getTypeName(typeNode: any): string {
+  if (!typeNode) return 'unknown';
+  if (typeof typeNode === 'string') return typeNode;
+  if (typeNode.type === 'Identifier') return typeNode.name;
+  if (typeNode.type === 'GenericType') return typeNode.name;
+  if (typeNode.type === 'CallExpr' && typeNode.callee?.type === 'Identifier') {
+    return typeNode.callee.name;
+  }
+  return 'unknown';
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0] || 'help';
@@ -224,6 +242,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
   const compiled: Record<string, string> = {};
   const moduleInfoMap: Map<string, ModuleInfo> = new Map();
   const moduleNameToInfo: Map<string, ModuleInfo> = new Map();
+  const fileToModuleSpecifier: Map<string, string> = new Map();
   const entryDir = dirname(entryFile);
 
   function collectModule(filePath: string): void {
@@ -235,6 +254,9 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     for (const moduleName of info.imports) {
       const depFile = resolveModule(moduleName, dirname(filePath));
       if (depFile && existsSync(depFile)) {
+        if (!fileToModuleSpecifier.has(depFile)) {
+          fileToModuleSpecifier.set(depFile, moduleName);
+        }
         collectModule(depFile);
         const depInfo = moduleInfoMap.get(depFile);
         if (depInfo) {
@@ -267,6 +289,32 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
 
   const globalTypeclasses = collectTypeclasses();
 
+  function collectGlobalInstances(): GlobalInstanceInfo[] {
+    const allInstances: GlobalInstanceInfo[] = [];
+
+    for (const [filePath] of moduleInfoMap) {
+      const source = readFileSync(filePath, 'utf-8');
+      const ast = parse(source);
+      const moduleName = fileToModuleSpecifier.get(filePath) || basename(filePath, '.arix');
+
+      for (const node of ast.body) {
+        if (node.type === 'InstanceDecl') {
+          const inst = node as InstanceDecl;
+          allInstances.push({
+            typeclass: inst.typeclass,
+            forTypes: inst.forTypes.map(t => getTypeName(t)),
+            methods: inst.methods.map(m => m.name),
+            module: moduleName,
+          });
+        }
+      }
+    }
+
+    return allInstances;
+  }
+
+  const globalInstances = collectGlobalInstances();
+
   function compileFile(arixFile: string, isMain = false): void {
     if (compiled[arixFile]) return;
 
@@ -296,6 +344,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     const transpiler = new Transpiler();
     transpiler.setModuleInfo(moduleNameToInfo);
     transpiler.setGlobalTypeclasses(globalTypeclasses);
+    transpiler.setGlobalInstances(globalInstances);
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
 

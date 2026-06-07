@@ -42,6 +42,13 @@ import type {
 const RUNTIME_IMPORT = (relativePath: string) => 
   `import { createADT, print } from '${relativePath}';`;
 
+interface GlobalInstanceInfo {
+  typeclass: string;
+  forTypes: string[];
+  methods: string[];
+  module: string;
+}
+
 export class Transpiler {
   private output = '';
   private indent = 0;
@@ -59,11 +66,13 @@ export class Transpiler {
   private currentFilePath: string = '';
   private importedNames: Map<string, string> = new Map();
   private moduleInfoMap: Map<string, { exports: string[]; imports: string[] }> = new Map();
+  private moduleNamespaces: Map<string, string> = new Map();
   private needsRuntime = false;
   private outputDir: string = '';
   private autoRunMain = false;
   private variantFieldNames: Map<string, string[]> = new Map();
   private instanceCounter = 0;
+  private globalInstances: GlobalInstanceInfo[] = [];
 
   setOutputDir(dir: string): void {
     this.outputDir = dir;
@@ -84,6 +93,7 @@ export class Transpiler {
     this.instances.clear();
     this.instanceIds.clear();
     this.instanceTypes.clear();
+    this.moduleNamespaces.clear();
     this.instanceCounter = 0;
     this.currentFilePath = filePath;
     this.needsRuntime = false;
@@ -96,6 +106,9 @@ export class Transpiler {
       if (node.type === 'FunctionDecl') {
         const fn = node as FunctionDecl;
         this.functions.set(fn.name, fn.params.length);
+      }
+      if (node.type === 'ImportStmt') {
+        this.registerImportNamespace(node as ImportStmt);
       }
     }
 
@@ -193,6 +206,10 @@ export class Transpiler {
 
   setGlobalTypeclasses(typeclasses: Map<string, TypeclassDecl>): void {
     this.globalTypeclasses = typeclasses;
+  }
+
+  setGlobalInstances(instances: GlobalInstanceInfo[]): void {
+    this.globalInstances = instances;
   }
 
   private writeln(text = ''): void {
@@ -412,18 +429,21 @@ export class Transpiler {
   private transpileImportStmt(node: ImportStmt): void {
     const stdlibModules = ['result', 'maybe', 'list'];
     const moduleNameLower = node.module.toLowerCase();
+    const namespace = this.getImportNamespace(node);
 
     if (stdlibModules.includes(moduleNameLower)) {
       const jsPath = `./${moduleNameLower}.js`;
       const moduleInfo = this.moduleInfoMap.get(node.module);
 
       if (node.alias) {
-        const alias = this.sanitizeModuleName(node.alias);
-        this.esmImports.push(`import * as ${alias} from '${jsPath}';`);
-        this.importedNames.set(alias, alias);
-        this.constructors.set(alias, alias);
+        this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
+        this.importedNames.set(namespace, namespace);
+        this.constructors.set(namespace, namespace);
         return;
       }
+
+      // Keep a namespace import available for cross-module typeclass dispatch.
+      this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
 
       let importItems = moduleInfo?.exports ? [...moduleInfo.exports] : [];
 
@@ -435,15 +455,17 @@ export class Transpiler {
         importItems = importItems.filter(item => !node.hiding!.includes(item));
       }
 
+      importItems = importItems.filter(item => !this.isGeneratedDispatchMethod(item));
+
       if (importItems.length > 0) {
         const itemsStr = importItems.join(', ');
-        this.esmImports.push(`import { ${itemsStr} } from '${jsPath}';`);
+        this.pushEsmImport(`import { ${itemsStr} } from '${jsPath}';`);
         for (const item of importItems) {
           this.importedNames.set(item, '');
           this.constructors.set(item, item);
         }
       } else {
-        this.esmImports.push(`import * as ${moduleNameLower} from '${jsPath}';`);
+        this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
       }
       return;
     }
@@ -457,17 +479,17 @@ export class Transpiler {
     
     if (node.items && node.items.length > 0) {
       const itemsStr = node.items.join(', ');
-      this.esmImports.push(`import { ${itemsStr} } from '${jsPath}';`);
+      this.pushEsmImport(`import { ${itemsStr} } from '${jsPath}';`);
       for (const item of node.items) {
         this.importedNames.set(item, '');
         this.constructors.set(item, item);
       }
     } else if (node.alias) {
-      this.esmImports.push(`import * as ${sanitizedAlias} from '${jsPath}';`);
+      this.pushEsmImport(`import * as ${sanitizedAlias} from '${jsPath}';`);
       this.importedNames.set(sanitizedAlias, sanitizedAlias);
       this.constructors.set(sanitizedAlias, sanitizedAlias);
     } else {
-      this.esmImports.push(`import * as ${sanitizedAlias} from '${jsPath}';`);
+      this.pushEsmImport(`import * as ${sanitizedAlias} from '${jsPath}';`);
       
       const moduleKey = node.isRelative ? node.module : this.getModuleName(node.module);
       const moduleInfo = this.moduleInfoMap.get(node.module) || this.moduleInfoMap.get(moduleKey);
@@ -480,6 +502,40 @@ export class Transpiler {
           }
         }
       }
+    }
+  }
+
+  private registerImportNamespace(node: ImportStmt): void {
+    const moduleNameLower = node.module.toLowerCase();
+    const isStdlibModule = ['result', 'maybe', 'list'].includes(moduleNameLower);
+    if (!isStdlibModule) {
+      return;
+    }
+
+    const namespace = node.alias
+      ? this.sanitizeModuleName(node.alias)
+      : `__mod_${this.sanitizeModuleName(moduleNameLower)}`;
+    this.moduleNamespaces.set(moduleNameLower, namespace);
+    this.moduleNamespaces.set(node.module, namespace);
+  }
+
+  private getImportNamespace(node: ImportStmt): string {
+    const moduleNameLower = node.module.toLowerCase();
+    const existing = this.moduleNamespaces.get(node.module) || this.moduleNamespaces.get(moduleNameLower);
+    if (existing) {
+      return existing;
+    }
+    const fallback = node.alias
+      ? this.sanitizeModuleName(node.alias)
+      : `__mod_${this.sanitizeModuleName(moduleNameLower)}`;
+    this.moduleNamespaces.set(moduleNameLower, fallback);
+    this.moduleNamespaces.set(node.module, fallback);
+    return fallback;
+  }
+
+  private pushEsmImport(importLine: string): void {
+    if (!this.esmImports.includes(importLine)) {
+      this.esmImports.push(importLine);
     }
   }
 
@@ -1064,12 +1120,25 @@ export class Transpiler {
     return 'unknown';
   }
 
+  private isGeneratedDispatchMethod(name: string): boolean {
+    for (const [, typeclassDecl] of this.typeclasses) {
+      if (typeclassDecl.methods.some(method => method.name === name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private generateDispatchFunctions(): void {
     // Generate dispatch functions for each typeclass method
     for (const [tcName, tc] of this.typeclasses) {
       const instanceVarNames = this.instanceIds.get(tcName) || [];
+      const externalInstances = this.globalInstances.filter(inst =>
+        inst.typeclass === tcName &&
+        inst.methods.includes(tc.methods[0]?.name || '')
+      );
       
-      if (instanceVarNames.length === 0) {
+      if (instanceVarNames.length === 0 && externalInstances.length === 0) {
         // No instances for this typeclass - skip dispatch generation
         continue;
       }
@@ -1104,13 +1173,35 @@ export class Transpiler {
         // Try each instance in order with type checking
         for (const instanceVarName of instanceVarNames) {
           const typeNames = this.instanceTypes.get(instanceVarName) || [];
-          const typeCheck = this.generateTypeCheck(typeNames[0]);
+          const typeCheck = this.generateTypeCheck(typeNames[0], paramNames[0] || 'x');
           
           this.writeln(`if (${typeCheck}) {`);
           this.indent++;
           this.writeln(`if (${instanceVarName}.${methodName}) {`);
           this.indent++;
           this.writeln(`return ${instanceVarName}.${methodName}(${paramList});`);
+          this.indent--;
+          this.writeln(`}`);
+          this.indent--;
+          this.writeln(`}`);
+        }
+
+        // Try imported module instances (cross-module dispatch).
+        const externalInstances = this.globalInstances.filter(inst =>
+          inst.typeclass === tcName &&
+          inst.methods.includes(methodName)
+        );
+        for (const instance of externalInstances) {
+          const moduleNamespace = this.moduleNamespaces.get(instance.module) || this.moduleNamespaces.get(instance.module.toLowerCase());
+          if (!moduleNamespace) {
+            continue;
+          }
+          const typeCheck = this.generateTypeCheck(instance.forTypes[0], paramNames[0] || 'x');
+          this.writeln(`if (${typeCheck}) {`);
+          this.indent++;
+          this.writeln(`if (${moduleNamespace}.${methodName}) {`);
+          this.indent++;
+          this.writeln(`return ${moduleNamespace}.${methodName}(${paramList});`);
           this.indent--;
           this.writeln(`}`);
           this.indent--;
@@ -1132,22 +1223,22 @@ export class Transpiler {
     }
   }
 
-  private generateTypeCheck(typeName: string | undefined): string {
+  private generateTypeCheck(typeName: string | undefined, valueRef: string = 'x'): string {
     if (!typeName) return 'true';
     
     switch (typeName) {
       case 'Int':
-        return 'Number.isInteger(x)';
+        return `Number.isInteger(${valueRef})`;
       case 'String':
-        return 'typeof x === "string"';
+        return `typeof ${valueRef} === "string"`;
       case 'Boolean':
-        return 'typeof x === "boolean"';
+        return `typeof ${valueRef} === "boolean"`;
       case 'Float':
-        return 'typeof x === "number" && !Number.isInteger(x)';
+        return `typeof ${valueRef} === "number" && !Number.isInteger(${valueRef})`;
       case 'List':
-        return 'Array.isArray(x)';
+        return `Array.isArray(${valueRef})`;
       default:
-        return `x && x._type === '${typeName}'`;
+        return `${valueRef} && ${valueRef}._type === '${typeName}'`;
     }
   }
 }

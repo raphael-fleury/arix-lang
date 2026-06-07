@@ -296,6 +296,51 @@ fn createStatus() = Status.Active`;
     expect(result).toBe('42');
   });
 
+  it('dispatches typeclass methods by runtime type of the first argument', () => {
+    const src = [
+      'typeclass Mapper(a)',
+      '  map(x a, f) -> a',
+      'impl Mapper for List',
+      '  map(x, f) = x.map(f)',
+      'impl Mapper for String',
+      '  map(x, f) = f(x)',
+      'fn main() = [map([1, 2, 3], (x) -> x * 2), map("ok", (x) -> x ++ "!")]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = evalTranspiled(js);
+    expect(result).toEqual([[2, 4, 6], 'ok!']);
+  });
+
+  it('dispatches flatMap-like methods by runtime type of the first argument', () => {
+    const src = [
+      'typeclass Chain(a)',
+      '  flatMap(x a, f) -> a',
+      'impl Chain for List',
+      '  flatMap(x, f) = x.flatMap(f)',
+      'impl Chain for String',
+      '  flatMap(x, f) = f(x)',
+      'fn main() = [flatMap([1, 2], (x) -> [x, x + 10]), flatMap("ha", (x) -> x ++ x)]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = evalTranspiled(js);
+    expect(result).toEqual([[1, 11, 2, 12], 'haha']);
+  });
+
+  it('throws a runtime error when no instance matches the argument type', () => {
+    const src = [
+      'typeclass Mapper(a)',
+      '  map(x a, f) -> a',
+      'impl Mapper for List',
+      '  map(x, f) = x.map(f)',
+      'fn main() = map(true, (x) -> x)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    expect(() => evalTranspiled(js)).toThrow(/No instance of Mapper found/);
+  });
+
   it('transpiles typeclass with two type parameters', () => {
     const src = [
       'typeclass Convertible(a, b)',

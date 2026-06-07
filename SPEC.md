@@ -406,7 +406,7 @@ fn convertAndStore(value) where Convertible(value, String) =
 
 ### 9.4 Method Dispatch
 
-Method dispatch is **implicit** — the compiler selects the correct implementation based on type:
+Method dispatch is **implicit** and happens at runtime — the generated JavaScript selects the correct implementation based on the runtime type of the first argument:
 
 ```python
 typeclass Show(a)
@@ -424,6 +424,12 @@ fn displayIt(x) where Show(x) =
 displayIt(42)           # "42"
 displayIt("hello")      # "hello"
 ```
+
+Current dispatch model:
+- Runtime checks are generated per instance (for example: `Array.isArray(x)`, `typeof x === "string"`, or `x._type === "Maybe"`).
+- The first matching instance is selected and called.
+- If no instance matches, execution raises a runtime error.
+- `where` constraints are part of function signatures, but instance availability is not fully validated at compile-time.
 
 ### 9.5 Generic Implementations
 
