@@ -133,6 +133,15 @@ describe('Lexer', () => {
     expect(keywords).toEqual(['true', 'false']);
   });
 
+  it('treats unsupported control-flow words as identifiers', () => {
+    const tokens = tokenize('loop try catch throw yield');
+    const identifiers = tokens.filter(t => t.type === 'IDENTIFIER').map(t => t.value);
+    const keywords = tokens.filter(t => t.type === 'KEYWORD').map(t => t.value);
+
+    expect(identifiers).toEqual(['loop', 'try', 'catch', 'throw', 'yield']);
+    expect(keywords).toEqual([]);
+  });
+
   it('tokenizes dot as an operator', () => {
     const tokens = tokenize('a . b');
     const nonPunct = tokens.filter(t => t.type !== 'NEWLINE' && t.type !== 'EOF' && t.value !== '');
