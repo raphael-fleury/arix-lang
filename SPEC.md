@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-**Arix** is a functional-first programming language designed with a low learning curve for OOP and imperative developers. It compiles to JavaScript/WASM.
+**Arix** is a functional-first programming language designed with a low learning curve for OOP and imperative developers. It compiles to JavaScript (ESM).
 
 ### Design Goals
 - Low barrier to entry for OOP developers
@@ -16,11 +16,11 @@
 
 ### 2.1 Basic Syntax
 - Indentation-based (significant whitespace)
-- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `if`, `else`, `when`, `import`, `type`, `typeclass`, `impl`, `for`, `try`, `catch`, `async`, `await`
+- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `when`, `if`, `then`, `else`, `import`, `type`, `typeclass`, `impl`, `for`, `in`, `while`, `break`, `continue`, `where`, `async`, `await`, `return`, `as`, `true`, `false`
 - Comments: `# single line`, `""" multi-line """`
 
 ### 2.2 Nomenclature
-- **Types**: PascalCase (`User`, `Maybe`, `Result`)
+- **Types**: PascalCase (`Int`, `User`, `Maybe`, `Result`)
 - **Functions/Variables**: camelCase (`getUser`, `isValid`, `userName`)
 - **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRIES`)
 - **Files**: kebab-case (`user-service.arix`, `my-utils.arix`)
@@ -50,15 +50,14 @@ user = { name: "Ana", age: 30 }
 
 ### 3.4 Type Inference
 - Strong inference for local variables and private functions
-- Type annotations **required** for public functions
 
 ```python
 # Inferred
 let x = 10              # Int
 let name = "Ana"        # String
 
-# Annotated (public)
-public fn add(a Int, b Int) Int = a + b
+# Annotated
+public fn add(a Int, b Int) -> Int = a + b
 ```
 
 ---
@@ -72,13 +71,12 @@ Arix supports **Algebraic Data Types** through a generic ADT constructor in the 
 Use the built-in `createADT` function to define custom types:
 
 ```python
-# In Arix (future syntax, currently use JavaScript)
-# type Maybe(a) = Just(a) | Nothing
-# type Result(a, e) = Ok(a) | Err(e)
+type Maybe(a) = Some(value: a) | None
+type Result(a, e) = Ok(value: a) | Err(error: e)
 ```
 
 The runtime provides ready-to-use ADTs:
-- **Maybe**: Optional values (`Just(value)`, `Nothing()`)
+- **Maybe**: Optional values (`Some(value)`, `None`)
 - **Result**: Success/failure (`Ok(value)`, `Err(error)`)
 - **List**: Immutable linked list (`Cons(head, tail)`, `Nil()`)
 
@@ -86,24 +84,25 @@ The runtime provides ready-to-use ADTs:
 
 #### Maybe Type
 ```python
+import maybe
+
 fn getUser(id) =
-    let user = Maybe.Just({ name: "Alice", age: 30 })
+  let user = Some({ name: "Alice", age: 30 })
     match user:
-        Just(u) -> "Found: ${u.name}"
-        Nothing -> "User not found"
+    Some(u) -> "Found: ${u.name}"
+    None -> "User not found"
 
 # Or using utilities
-let age = user |> MaybeUtils.map(u => u.age)
-let nameOrDefault = MaybeUtils.getOrElse(user, { name: "Unknown" })
+let ageOrZero = maybe.getOrElse(user, 0)
 ```
 
 #### Result Type
 ```python
 fn divide(a, b) =
     if b == 0:
-        Result.Err("Division by zero")
+        Err("Division by zero")
     else:
-        Result.Ok(a / b)
+        Ok(a / b)
 
 fn main() =
     let result = divide(10, 2)
@@ -191,7 +190,7 @@ fn add(a, b) = a + b
 fn greet(name) = "Hello, ${name}!"
 
 # With annotations
-fn add(a Int, b Int) Int = a + b
+fn add(a Int, b Int) -> Int = a + b
 ```
 
 ### 6.2 Anonymous Functions (Lambdas)
@@ -206,15 +205,15 @@ let add = (a, b) -> a + b
 let getAnswer = () -> 42
 
 # As function argument
-[1, 2, 3].map((x) -> x * 2)
+map((x) -> x * 2)
 
 # Higher-order (returns another lambda)
 let makeAdder = (n) -> (x) -> x + n
 let addFive = makeAdder(5)
 addFive(3)  # 8
 
-# With type annotations
-let add = (a Int, b Int) Int -> a + b
+# Typed parameters in lambda
+let add = (a Int, b Int) -> a + b
 ```
 
 ### 6.2 Currying (Optional)
@@ -227,10 +226,10 @@ let addOne = add(1)  # Partial application
 
 ### 6.3 Async Functions
 ```python
-async fn fetchUser(id Int) Result(User, String) =
+async fn fetchUser(id Int) -> Result(User, String) =
     let response = await http.get("/api/users/${id}")
     match response:
-        Ok(r) if r.ok -> Ok(r.json())
+    Ok(r) when r.ok -> Ok(r.json())
         Ok(r) -> Err("HTTP ${r.status}")
         Err(e) -> Err(e.message)
 ```
@@ -294,11 +293,11 @@ evens = [x for x in nums if x % 2 == 0]
 doubled = [x * 2 for x in nums]
 
 # Access and functions
-nums !! 0                # Option(Int) => Some(10)
-nums !! 5                # Option(Int) => None
+nums !! 0                # Maybe(Int) => Some(10)
+nums !! 5                # Maybe(Int) => None
 nums !! 5 ?? 0           # Int => 0 (default fallback)
-head nums                # Option(Int) => Some(10)
-last nums                # Option(Int) => Some(30)
+head nums                # Maybe(Int) => Some(10)
+last nums                # Maybe(Int) => Some(30)
 length nums              # Int => 3
 isEmpty nums             # Bool => False
 ```
@@ -306,7 +305,7 @@ isEmpty nums             # Bool => False
 ### 8.2 Maybe and Results
 ```python
 # Maybe
-type Maybe(a) = Just(a) | Nothing
+type Maybe(a) = Some(value: a) | None
 
 let age = findAge(userId) ?? 0
 
@@ -436,7 +435,7 @@ Current dispatch model:
 Implement typeclasses for generic types:
 
 ```python
-impl Show for List(a) when Show(a)
+impl Show for List(a) where Show(a)
   show(list) = match list:
     [] -> "[]"
     [h | t] -> "[" ++ show(h) ++ ", " ++ show(t) ++ "]"
@@ -469,7 +468,7 @@ When implementing `Ord`, the `Eq` instance must already exist for the same type.
 
 ## 10. Loops
 
-### 9.1 For Loops
+### 10.1 For Loops
 
 For loops iterate over iterables with pattern matching support.
 
@@ -573,16 +572,20 @@ import ../shared (formatDate)
 
 # Stdlib modules (built-in)
 import result
-import option
+import maybe
 import list
 import show
+import monoid
+import functor
+import applicative
+import monad
 ```
 
 ### 11.3 Module Resolution
 ```
 1. Relative imports (./foo, ../foo) → ./foo.arix
 2. Named imports (foo-bar) → {src,root}/foo-bar.arix
-3. Stdlib (result, option, list, show) → built-in runtime
+3. Stdlib (result, maybe, list, show, monoid, functor, applicative, monad) → stdlib/*.arix
 ```
 
 ### 11.4 Visibility
@@ -612,6 +615,10 @@ dist/
 └── helper-utils.js
 ```
 
+Notes:
+- Current CLI command shape is `arix build <file>`.
+- Build emits ESM files and copies `arix-runtime.js` to the output directory.
+
 ### 11.6 Example Project Structure
 ```
 project/
@@ -629,26 +636,28 @@ project/
 
 ## 12. Error Handling
 
-### 12.1 Option Type
+### 12.1 Maybe Type
 ```python
-type Option(a) = Some(a) | None
+type Maybe(a) = Some(value: a) | None
 
-fn findUser(id Int) Option(User) = ...
+fn findUser(id Int) -> Maybe(User) = ...
 ```
 
 ### 12.2 Result Type
 ```python
 type Result(a, e) = Ok(a) | Err(e)
 
-fn parseInt(s String) Result(Int, String) = ...
+fn parseInt(s String) -> Result(Int, String) = ...
 ```
 
 ### 12.3 Async Error Handling
 ```python
-async fn fetchUser(id Int) Result(User, String) =
-    try await http.get("/api/users/${id}")
-    catch e:
-        Err(e.message)
+async fn fetchUser(id Int) -> Result(User, String) =
+  let response = await http.get("/api/users/${id}")
+  match response:
+    Ok(r) when r.ok -> Ok(r)
+    Ok(r) -> Err("HTTP ${r.status}")
+    Err(e) -> Err(e.message)
 ```
 
 ---
@@ -661,19 +670,17 @@ async fn fetchUser(id Int) Result(User, String) =
 Calculates the area of a shape.
 Returns the value in square units.
 """
-fn area(shape Shape) Float = ...
+fn area(shape Shape) -> Float = ...
 ```
 
 ### 13.2 Type Annotations
 ```python
-public fn fetchUser
+public fn fetchUser(id Int) -> Maybe(User)
     """Fetches a user by ID.
     
     @param id - unique identifier
     @returns Some(User) if found, None otherwise
     """
-    id Int
-    -> Option(User)
 = ...
 ```
 
@@ -681,11 +688,10 @@ public fn fetchUser
 
 ## 14. Reserved Keywords
 ```
-fn, let, let mut, if, else, match, when, import, type,
-public, internal, async, await, try, catch, throw,
-return, yield, as, in, for, while, loop, break, continue,
-true, false, None, Ok, Err, Some, module, where, use,
-typeclass, impl
+fn, let, mut, if, then, else, match, when, import, type,
+public, internal, async, await, return,
+as, in, for, while, break, continue,
+true, false, where, typeclass, impl
 ```
 
 ---
@@ -701,7 +707,7 @@ fn main() =
 
 ### 15.2 Functional Pipeline
 ```python
-fn processNumbers(nums List(Int)) Int =
+fn processNumbers(nums List(Int)) -> List(Int) =
     nums
         |> map(* 2)
         |> filter(> 0)
@@ -716,12 +722,12 @@ public fn main() =
 ```python
 type Shape = Circle(r Float) | Rectangle(w Float, h Float)
 
-fn area(shape Shape) Float =
+fn area(shape Shape) -> Float =
     match shape:
         Circle(r) -> 3.14159 * r * r
         Rectangle(w, h) -> w * h
 
-fn describe(shape Shape) String =
+fn describe(shape Shape) -> String =
     match shape:
         Circle(r) when r > 10 -> "Large circle"
         Circle(r) -> "Small circle"
@@ -749,10 +755,10 @@ display("hello")   # "hello"
 
 ### 15.5 Async/Await
 ```python
-async fn fetchUserData(id Int) Result(User, String) =
+async fn fetchUserData(id Int) -> Result(User, String) =
     let response = await http.get("/api/users/${id}")
     match response:
-        Ok(r) if r.ok -> Ok(toJson(r))
+    Ok(r) when r.ok -> Ok(toJson(r))
         Ok(r) -> Err("Request failed: ${r.status}")
         Err(e) -> Err("Network error: ${e.message}")
 
@@ -771,10 +777,11 @@ program       ::= stmt*
 stmt          ::= letDecl | fnDecl | typeDecl | importStmt | expr
 
 letDecl       ::= 'let' ['mut'] pattern ['??' expr] '=' expr
-fnDecl        ::= ['public' | 'internal'] 'async'? 'fn' pattern params? ['->' type] ['where' constraints] '=' expr
+fnDecl        ::= ['public' | 'internal'] 'async'? 'fn' identifier params? ['->' type] ['where' constraints] '=' expr
 lambdaExpr    ::= '(' params ')' '->' expr
 pattern       ::= identifier | recordPat | tuplePat | listPat | typePat
-recordPat     ::= '{' (pattern (',' pattern)*)? ['..' ident]? '}'
+recordPat     ::= '{' (fieldPat (',' fieldPat)*)? '}'
+fieldPat      ::= ident [':' pattern] ['as' ident] ['??' expr]
 tuplePat      ::= '(' pattern (',' pattern)* ')'
 listPat       ::= '[' pattern ('|' pattern)? ']'
 typePat       ::= ident '(' pattern (',' pattern)* ')'
@@ -791,9 +798,9 @@ importItems   ::= ident (',' ident)*
 
 typeclassDecl ::= 'typeclass' ident '(' typeParams ')' [constraints] methodDecl*
 methodDecl    ::= ident params '->' type ['=' expr]
-instanceDecl  ::= 'impl' ident ['for' '(' typeList ')'] ['where' constraints] methodImpl*
+instanceDecl  ::= 'impl' ident 'for' (type | '(' typeList ')') ['where' constraints] methodImpl*
 constraints   ::= 'where' constraint (',' constraint)*
-constraint    ::= ident '(' type (',' type)* ')'
+constraint    ::= ident '(' ident (',' ident)* ')'
 ```
 
 ---
@@ -801,8 +808,8 @@ constraint    ::= ident '(' type (',' type)* ')'
 ## Appendix B: Standard Library Types
 
 ```python
-# Option
-type Option(a) = Some(a) | None
+# Maybe
+type Maybe(a) = Some(value: a) | None
 
 # Result  
 type Result(a, e) = Ok(a) | Err(e)
@@ -825,11 +832,11 @@ type Tuple3(a, b, c) = (a, b, c)
 | Currying | via libraries | built-in |
 | Pattern matching | match-case (limited) | full PM |
 | Type system | dynamic + TypeGuard | strong static |
-| Null | None | Option/Result |
+| Null | None | Maybe/Result |
 | Pipe | \|> (3.10+) | native |
 | Typeclasses | ABC/Protocols | native typeclasses |
 
 ---
 
-*Version: 1.0-draft*
-*Last Updated: 2026-04-27*
+*Version: 1.1-draft*
+*Last Updated: 2026-06-07*
