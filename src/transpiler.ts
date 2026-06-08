@@ -43,6 +43,7 @@ const RUNTIME_IMPORT = (relativePath: string) =>
   `import { createADT, print } from '${relativePath}';`;
 
 const STDLIB_MODULES = ['bool', 'eq', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+const JS_NAMESPACE = 'js';
 
 interface GlobalInstanceInfo {
   typeclass: string;
@@ -76,6 +77,7 @@ export class Transpiler {
   private instanceCounter = 0;
   private globalInstances: GlobalInstanceInfo[] = [];
   private needsBoolHelpers = false;
+  private scopeStack: Set<string>[] = [];
 
   setOutputDir(dir: string): void {
     this.outputDir = dir;
@@ -101,6 +103,7 @@ export class Transpiler {
     this.currentFilePath = filePath;
     this.needsRuntime = false;
     this.needsBoolHelpers = false;
+    this.scopeStack = [new Set()];
 
     const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
     const implicitStdlibImports = this.getImplicitStdlibImports(explicitImports);
@@ -123,9 +126,28 @@ export class Transpiler {
       this.registerImportNamespace(importNode);
     }
 
+    // Pre-register imports so typeclass/instance bodies can resolve imported symbols
+    // before the regular import emission pass.
+    for (const importNode of implicitStdlibImports) {
+      this.transpileImportStmt(importNode);
+    }
+    for (const node of ast.body) {
+      if (node.type === 'ImportStmt') {
+        this.transpileImportStmt(node as ImportStmt);
+      }
+    }
+
     // First pass: register all typeclasses and instances for default implementations
     let firstPassInstanceCounter = 0;
     for (const node of ast.body) {
+      if (node.type === 'TypeDecl') {
+        const typeDecl = node as TypeDecl;
+        for (const variant of typeDecl.variants) {
+          const fieldNames = variant.fields.map(f => f.name);
+          this.constructors.set(variant.name, `${typeDecl.name}.${variant.name}`);
+          this.variantFieldNames.set(variant.name, fieldNames);
+        }
+      }
       if (node.type === 'TypeclassDecl') {
         const tc = node as TypeclassDecl;
         this.typeclasses.set(tc.name, tc);
@@ -288,6 +310,7 @@ export class Transpiler {
   }
 
   private transpileFunctionDecl(node: FunctionDecl): void {
+    this.assertNotReservedIdentifier(node.name);
     this.functions.set(node.name, node.params.length);
     
     const asyncPrefix = node.isAsync ? 'async ' : '';
@@ -297,12 +320,19 @@ export class Transpiler {
     if (node.body.type === 'FunctionExpr') {
       // It's an operator function like: fn add = (+)
       const fnExpr = node.body as FunctionExpr;
+      fnExpr.params.forEach(param => this.assertNotReservedIdentifier(param.name));
+      const body = this.withScope(() => {
+        this.declareName(node.name);
+        fnExpr.params.forEach(param => this.declareName(param.name));
+        return this.transpileExpr(fnExpr.body);
+      });
       const params = fnExpr.params.map(p => p.name).join(', ');
-      const body = this.transpileExpr(fnExpr.body);
       this.writeln(`${visibility}const ${node.name} = (${params}) => ${body};`);
     } else if (node.params.length === 0) {
       this.writeln(`${visibility}${asyncPrefix}function ${node.name}() {`);
       this.indent++;
+      this.pushScope();
+      this.declareName(node.name);
       this.emitImplicitArgAliases(node.params);
       
       if (node.body.type === 'BlockExpr') {
@@ -321,12 +351,17 @@ export class Transpiler {
         this.writeln(`return ${body};`);
       }
       
+      this.popScope();
       this.indent--;
       this.writeln('}');
     } else {
+      node.params.forEach(param => this.assertNotReservedIdentifier(param.name));
       const params = node.params.map(p => p.name).join(', ');
       this.writeln(`${visibility}${asyncPrefix}function ${node.name}(${params}) {`);
       this.indent++;
+      this.pushScope();
+      this.declareName(node.name);
+      node.params.forEach(param => this.declareName(param.name));
       this.emitImplicitArgAliases(node.params);
       
       if (node.body.type === 'BlockExpr') {
@@ -345,6 +380,7 @@ export class Transpiler {
         this.writeln(`return ${body};`);
       }
       
+      this.popScope();
       this.indent--;
       this.writeln('}');
     }
@@ -363,6 +399,7 @@ export class Transpiler {
       if (allBindings) {
         this.writeln(`${allBindings};`);
       }
+      this.collectPatternBindings(node.pattern).forEach(name => this.declareName(name));
       return;
     }
 
@@ -370,6 +407,7 @@ export class Transpiler {
     const pattern = this.transpileLetPattern(node.pattern);
     const value = this.transpileExpr(node.value);
     this.writeln(`${keyword} ${pattern} = ${value};`);
+    this.collectPatternBindings(node.pattern).forEach(name => this.declareName(name));
   }
 
   private transpileLetPattern(pattern: Pattern): string {
@@ -427,6 +465,7 @@ export class Transpiler {
   }
 
   private transpileTypeDecl(node: TypeDecl): void {
+    this.declareName(node.name);
     this.exports.push(node.name);
     
     if (node.recordFields) {
@@ -482,7 +521,7 @@ export class Transpiler {
 
       if (node.implicit) {
         this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
-        const exportItems = (moduleInfo?.exports || []).filter(item => !this.isGeneratedDispatchMethod(item));
+        const exportItems = (moduleInfo?.exports || this.getStdlibFallbackExports(moduleNameLower)).filter(item => !this.isGeneratedDispatchMethod(item));
         for (const item of exportItems) {
           if (!this.importedNames.has(item)) {
             this.importedNames.set(item, namespace);
@@ -492,6 +531,7 @@ export class Transpiler {
       }
 
       if (node.alias) {
+        this.assertNotReservedIdentifier(namespace);
         this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
         this.importedNames.set(namespace, namespace);
         this.constructors.set(namespace, namespace);
@@ -501,7 +541,7 @@ export class Transpiler {
       // Keep a namespace import available for cross-module typeclass dispatch.
       this.pushEsmImport(`import * as ${namespace} from '${jsPath}';`);
 
-      let importItems = moduleInfo?.exports ? [...moduleInfo.exports] : [];
+      let importItems = moduleInfo?.exports ? [...moduleInfo.exports] : [...this.getStdlibFallbackExports(moduleNameLower)];
 
       if (node.items && node.items.length > 0) {
         importItems = [...node.items];
@@ -514,6 +554,7 @@ export class Transpiler {
       importItems = importItems.filter(item => !this.isGeneratedDispatchMethod(item));
 
       if (importItems.length > 0) {
+        importItems.forEach(item => this.assertNotReservedIdentifier(item));
         const itemsStr = importItems.join(', ');
         this.pushEsmImport(`import { ${itemsStr} } from '${jsPath}';`);
         for (const item of importItems) {
@@ -534,6 +575,7 @@ export class Transpiler {
     const sanitizedAlias = this.sanitizeModuleName(node.alias || moduleName);
     
     if (node.items && node.items.length > 0) {
+      node.items.forEach(item => this.assertNotReservedIdentifier(item));
       const itemsStr = node.items.join(', ');
       this.pushEsmImport(`import { ${itemsStr} } from '${jsPath}';`);
       for (const item of node.items) {
@@ -541,6 +583,7 @@ export class Transpiler {
         this.constructors.set(item, item);
       }
     } else if (node.alias) {
+      this.assertNotReservedIdentifier(sanitizedAlias);
       this.pushEsmImport(`import * as ${sanitizedAlias} from '${jsPath}';`);
       this.importedNames.set(sanitizedAlias, sanitizedAlias);
       this.constructors.set(sanitizedAlias, sanitizedAlias);
@@ -722,9 +765,7 @@ export class Transpiler {
       
       case 'MemberExpr': {
         const member = node as MemberExpr;
-        const object = this.transpileExpr(member.object);
-        const property = (member.property as Identifier).name;
-        return `${object}.${property}`;
+        return this.transpileMemberExpr(member);
       }
       
       case 'CallExpr': {
@@ -787,7 +828,11 @@ export class Transpiler {
       case 'FunctionExpr': {
         const fn = node as FunctionExpr;
         const params = fn.params.map(p => p.name).join(', ');
-        const body = this.transpileExpr(fn.body);
+        fn.params.forEach(param => this.assertNotReservedIdentifier(param.name));
+        const body = this.withScope(() => {
+          fn.params.forEach(param => this.declareName(param.name));
+          return this.transpileExpr(fn.body);
+        });
         const getOperator = (op: string) => op === '++' ? '+' : op;
         if (fn.params.length === 1 && fn.params[0].name === '_left' && fn.body.type === 'BinaryExpr') {
           const bin = fn.body as BinaryExpr;
@@ -883,11 +928,19 @@ export class Transpiler {
         const forExpr = node as ForExpr;
         const pattern = this.transpilePattern(forExpr.pattern);
         const iterable = this.transpileExpr(forExpr.iterable);
-        const body = this.transpileExpr(forExpr.body);
+        const patternBindings = this.collectPatternBindings(forExpr.pattern);
+        const body = this.withScope(() => {
+          patternBindings.forEach(name => this.declareName(name));
+          return this.transpileExpr(forExpr.body);
+        });
         let loopCode = `for (const ${pattern} of ${iterable}) {\n`;
         this.indent++;
-        if (forExpr.condition) {
-          const condition = this.transpileExpr(forExpr.condition);
+        const forCondition = forExpr.condition;
+        if (forCondition) {
+          const condition = this.withScope(() => {
+            patternBindings.forEach(name => this.declareName(name));
+            return this.transpileExpr(forCondition);
+          });
           this.needsBoolHelpers = true;
           loopCode += this.getIndent() + `if (!__boolToJs(${condition})) continue;\n`;
         }
@@ -920,17 +973,27 @@ export class Transpiler {
       
       case 'ListComprehension': {
         const comp = node as ListComprehension;
-        const element = this.transpileExpr(comp.element);
         const iterable = this.transpileExpr(comp.iterable);
-        const { condition, bindings, refs } = this.transpileMatchPattern(comp.pattern, '__head');
-        const guardParts: string[] = [];
-        if (condition) {
-          guardParts.push(`(${condition})`);
-        }
-        if (comp.condition) {
-          guardParts.push(`(${this.transpileExpr(comp.condition)})`);
-        }
-        const guard = guardParts.length > 0 ? guardParts.join(' && ') : '__boolTrue()';
+        const { element, guard, condition, bindings, refs } = this.withScope(() => {
+          this.collectPatternBindings(comp.pattern).forEach(name => this.declareName(name));
+          const transpiledElement = this.transpileExpr(comp.element);
+          const patternResult = this.transpileMatchPattern(comp.pattern, '__head');
+          const guardParts: string[] = [];
+          if (patternResult.condition) {
+            guardParts.push(`(${patternResult.condition})`);
+          }
+          if (comp.condition) {
+            guardParts.push(`(${this.transpileExpr(comp.condition)})`);
+          }
+          const transpiledGuard = guardParts.length > 0 ? guardParts.join(' && ') : '__boolTrue()';
+          return {
+            element: transpiledElement,
+            guard: transpiledGuard,
+            condition: patternResult.condition,
+            bindings: patternResult.bindings,
+            refs: patternResult.refs,
+          };
+        });
         this.needsBoolHelpers = true;
         const allBindings = [refs, bindings].filter(Boolean).join('; ');
         const bindingBlock = allBindings ? `${allBindings}; ` : '';
@@ -960,15 +1023,18 @@ export class Transpiler {
   private transpileMatchExpr(match: MatchExpr): string {
     const value = this.transpileExpr(match.value);
     const cases = match.arms.map(arm => {
-      const { bindings, condition, refs } = this.transpileMatchPattern(arm.pattern);
-      const body = this.transpileExpr(arm.body);
-      let guardCondition = condition;
-      if (arm.guard) {
-        const guard = `__boolToJs(${this.transpileExpr(arm.guard.condition)})`;
-        this.needsBoolHelpers = true;
-        guardCondition = guardCondition ? `(${guardCondition} && ${guard})` : guard;
-      }
-      return { bindings, condition: guardCondition, body, refs };
+      return this.withScope(() => {
+        this.collectPatternBindings(arm.pattern).forEach(name => this.declareName(name));
+        const { bindings, condition, refs } = this.transpileMatchPattern(arm.pattern);
+        const body = this.transpileExpr(arm.body);
+        let guardCondition = condition;
+        if (arm.guard) {
+          const guard = `__boolToJs(${this.transpileExpr(arm.guard.condition)})`;
+          this.needsBoolHelpers = true;
+          guardCondition = guardCondition ? `(${guardCondition} && ${guard})` : guard;
+        }
+        return { bindings, condition: guardCondition, body, refs };
+      });
     });
 
     let result = `((__v) => {\n`;
@@ -1090,8 +1156,10 @@ export class Transpiler {
   private emitImplicitArgAliasesForNames(paramNamesList: string[]): void {
     const paramNames = new Set(paramNamesList);
     this.writeln('const __args = Array.from(arguments);');
+    this.declareName('__args');
     if (!paramNames.has('params')) {
       this.writeln('const params = __args;');
+      this.declareName('params');
     }
   }
 
@@ -1100,6 +1168,10 @@ export class Transpiler {
   }
 
   private resolveIdentifierReference(name: string, materializeConstructorValue: boolean): string {
+    if (name === JS_NAMESPACE) {
+      throw new Error(`The identifier '${JS_NAMESPACE}' is reserved for JavaScript interop and can only be used as ${JS_NAMESPACE}.<name>.`);
+    }
+
     const fullName = this.constructors.get(name);
     if (fullName) {
       const fieldNames = this.variantFieldNames.get(name);
@@ -1112,27 +1184,120 @@ export class Transpiler {
       return fullName;
     }
 
-    const namespace = this.importedNames.get(name);
-    if (namespace) {
-      const resolved = namespace ? `${namespace}.${name}` : name;
-      if (materializeConstructorValue && /^[A-Z]/.test(name)) {
-        return this.materializeNullaryConstructor(resolved);
-      }
-      return resolved;
-    }
-
     if (name === 'Nil') {
       return '__listNil';
     }
     if (name === 'Cons') {
       return '__listCons';
     }
-
-    if (materializeConstructorValue && /^[A-Z]/.test(name)) {
-      return this.materializeNullaryConstructor(name);
+    if (name === 'print') {
+      return 'print';
     }
 
-    return name;
+    const importNamespace = this.importedNames.get(name);
+    if (importNamespace !== undefined) {
+      const resolved = importNamespace ? `${importNamespace}.${name}` : name;
+      if (materializeConstructorValue && /^[A-Z]/.test(name)) {
+        return this.materializeNullaryConstructor(resolved);
+      }
+      return resolved;
+    }
+
+    if (this.functions.has(name) || this.isNameDeclared(name)) {
+      if (materializeConstructorValue && /^[A-Z]/.test(name)) {
+        return this.materializeNullaryConstructor(name);
+      }
+      return name;
+    }
+
+    throw new Error(`Identifier '${name}' is not defined in Arix scope. Use ${JS_NAMESPACE}.${name} for JavaScript interop.`);
+  }
+
+  private transpileMemberExpr(member: MemberExpr): string {
+    const property = (member.property as Identifier).name;
+    if (member.object.type === 'Identifier' && (member.object as Identifier).name === JS_NAMESPACE) {
+      return `globalThis.${property}`;
+    }
+    if (member.object.type === 'MemberExpr' && this.isJsInteropMember(member.object as MemberExpr)) {
+      return `${this.transpileMemberExpr(member.object as MemberExpr)}.${property}`;
+    }
+    const object = this.transpileExpr(member.object);
+    return `${object}.${property}`;
+  }
+
+  private isJsInteropMember(node: MemberExpr): boolean {
+    if (node.object.type === 'Identifier' && (node.object as Identifier).name === JS_NAMESPACE) {
+      return true;
+    }
+    if (node.object.type === 'MemberExpr') {
+      return this.isJsInteropMember(node.object as MemberExpr);
+    }
+    return false;
+  }
+
+  private pushScope(): void {
+    this.scopeStack.push(new Set());
+  }
+
+  private popScope(): void {
+    this.scopeStack.pop();
+  }
+
+  private withScope<T>(run: () => T): T {
+    this.pushScope();
+    try {
+      return run();
+    } finally {
+      this.popScope();
+    }
+  }
+
+  private declareName(name: string): void {
+    this.assertNotReservedIdentifier(name);
+    const scope = this.scopeStack[this.scopeStack.length - 1];
+    scope.add(name);
+  }
+
+  private isNameDeclared(name: string): boolean {
+    for (let i = this.scopeStack.length - 1; i >= 0; i--) {
+      if (this.scopeStack[i].has(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private assertNotReservedIdentifier(name: string): void {
+    if (name === JS_NAMESPACE) {
+      throw new Error(`'${JS_NAMESPACE}' is a reserved namespace for JavaScript interop and cannot be declared or imported.`);
+    }
+  }
+
+  private collectPatternBindings(pattern: Pattern): string[] {
+    switch (pattern.type) {
+      case 'IdentifierPattern':
+        return [pattern.as || pattern.name];
+      case 'RecordPattern': {
+        const nested = pattern.fields.flatMap(field => this.collectPatternBindings(field.pattern));
+        if (pattern.rest) {
+          nested.push(pattern.rest);
+        }
+        return nested;
+      }
+      case 'TuplePattern':
+        return pattern.elements.flatMap(element => this.collectPatternBindings(element));
+      case 'ListPattern': {
+        const nested = pattern.elements.flatMap(element => this.collectPatternBindings(element));
+        if (pattern.rest) {
+          nested.push(pattern.rest);
+        }
+        return nested;
+      }
+      case 'ConstructorPattern':
+        return pattern.patterns.flatMap(child => this.collectPatternBindings(child));
+      default:
+        return [];
+    }
   }
 
   private emitListHelpers(): void {
@@ -1209,17 +1374,27 @@ export class Transpiler {
   }
 
   private transpileTypeclassDecl(node: TypeclassDecl): void {
+    this.declareName(node.name);
     this.exports.push(node.name);
+    const typeclassMethodNames = node.methods.map(method => method.name);
     
     // Generate default implementations for methods with bodies
     for (const method of node.methods) {
-      if (method.body) {
+      const methodBodyNode = method.body;
+      if (methodBodyNode) {
         // Generate a default implementation function
         const defaultFnName = `__default_${node.name}_${method.name}`;
         const paramList = method.params.map(p => p.name).join(', ');
         this.writeln(`const ${defaultFnName} = function(${paramList}) {`);
         this.indent++;
-        const methodBody = this.transpileExpr(method.body);
+        const methodBody = this.withScope(() => {
+          typeclassMethodNames.forEach(methodName => this.declareName(methodName));
+          method.params.forEach(param => this.declareName(param.name));
+          if (!method.params.some(param => param.name === 'params')) {
+            this.declareName('params');
+          }
+          return this.transpileExpr(methodBodyNode);
+        });
         this.writeln(`return ${methodBody};`);
         this.indent--;
         this.writeln('};');
@@ -1298,11 +1473,20 @@ export class Transpiler {
       }
       const paramList = paramNames.join(', ');
       
-      const methodBody = this.transpileExpr(method.body);
+      const scopedBody = this.withScope(() => {
+        paramNames.forEach(param => this.declareName(param));
+        if (!paramNames.includes('params')) {
+          this.declareName('params');
+        }
+        return this.transpileExpr(method.body);
+      });
       this.writeln(`${method.name}: function(${paramList}) {`);
       this.indent++;
-      this.emitImplicitArgAliasesForNames(paramNames);
-      this.writeln(`return ${methodBody};`);
+      this.withScope(() => {
+        paramNames.forEach(param => this.declareName(param));
+        this.emitImplicitArgAliasesForNames(paramNames);
+      });
+      this.writeln(`return ${scopedBody};`);
       this.indent--;
       this.writeln('},');
     }
@@ -1310,17 +1494,25 @@ export class Transpiler {
     // Then, add default implementations from the typeclass for methods not implemented
     if (typeclass) {
       for (const method of typeclass.methods) {
-        if (!implementedMethods.has(method.name) && method.body) {
-          // Try to use the exported default function, otherwise generate inline
-          const defaultFnName = `__default_${node.typeclass}_${method.name}`;
+        const methodBodyNode = method.body;
+        if (!implementedMethods.has(method.name) && methodBodyNode) {
           const paramNames = method.params.map(p => p.name || 'arg');
           const paramList = paramNames.join(', ');
           
           // Generate inline function for default implementation
-          const methodBody = this.transpileExpr(method.body);
+          const methodBody = this.withScope(() => {
+            paramNames.forEach(param => this.declareName(param));
+            if (!paramNames.includes('params')) {
+              this.declareName('params');
+            }
+            return this.transpileExpr(methodBodyNode);
+          });
           this.writeln(`${method.name}: function(${paramList}) {`);
           this.indent++;
-          this.emitImplicitArgAliasesForNames(paramNames);
+          this.withScope(() => {
+            paramNames.forEach(param => this.declareName(param));
+            this.emitImplicitArgAliasesForNames(paramNames);
+          });
           this.writeln(`return ${methodBody};`);
           this.indent--;
           this.writeln('},');
@@ -1360,6 +1552,22 @@ export class Transpiler {
       }
     }
     return false;
+  }
+
+  private getStdlibFallbackExports(moduleName: string): string[] {
+    const fallback: Record<string, string[]> = {
+      bool: ['Bool', 'True', 'False'],
+      list: ['List', 'Nil', 'Cons', 'head', 'last', 'length', 'isEmpty', 'append'],
+      show: ['Show', 'show'],
+      eq: ['Eq', 'eq', 'notEq'],
+      maybe: ['Maybe', 'Some', 'None', 'getOrElse'],
+      result: ['Result', 'Ok', 'Err'],
+      functor: ['Functor', 'map'],
+      applicative: ['Applicative', 'pure', 'apply'],
+      monad: ['Monad', 'pureM', 'flatMap'],
+      monoid: ['Monoid', 'empty', 'combine'],
+    };
+    return fallback[moduleName] || [];
   }
 
   private generateDispatchFunctions(): void {
@@ -1442,8 +1650,16 @@ export class Transpiler {
         }
         
         // Fallback: use default implementation if available
-        if (method.body) {
-          const defaultImpl = this.transpileExpr(method.body);
+        const defaultBody = method.body;
+        if (defaultBody) {
+          const defaultImpl = this.withScope(() => {
+            tc.methods.forEach(tcMethod => this.declareName(tcMethod.name));
+            paramNames.forEach(param => this.declareName(param));
+            if (!paramNames.includes('params')) {
+              this.declareName('params');
+            }
+            return this.transpileExpr(defaultBody);
+          });
           this.writeln(`return ${defaultImpl};`);
         } else {
           this.writeln(`throw new Error('No instance of ${tcName} found for ' + typeof ${paramNames[0]});`);

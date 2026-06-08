@@ -25,6 +25,20 @@
 - **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRIES`)
 - **Files**: kebab-case (`user-service.arix`, `my-utils.arix`)
 
+### 2.3 JavaScript Interop
+- JavaScript globals are only accessible through the reserved `js` namespace.
+- Direct fallback to unknown JavaScript identifiers is not allowed.
+- The identifier `js` is reserved and cannot be declared or imported.
+
+```python
+# Valid JavaScript interop
+fn parseNumber(text) = js.parseInt(text)
+async fn fetchAnswer() = await js.Promise.resolve(42)
+
+# Invalid: implicit JavaScript access
+fn bad(text) = parseInt(text)   # compile error
+```
+
 ---
 
 ## 3. Types
@@ -312,7 +326,7 @@ let age = findAge(userId) ?? 0
 # Result  
 type Result(a, e) = Ok(a) | Err(e)
 
-match parseInt(input):
+match parseIntResult(input):
     Ok(n) -> n * 2
     Err(e) -> 0
 ```

@@ -98,11 +98,11 @@ describe('Transpiler', () => {
     expect(result).toEqual([true, false]);
   });
 
-  it('treats bare nullary constructors as values', () => {
-    const src = 'fn main() = True';
+  it('transpiles bare nullary constructors', () => {
+    const src = 'type Flag = On | Off\nfn main() = On';
     const ast = parse(src);
     const js = transpile(ast);
-    expect(js).toContain("typeof True === 'function'");
+    expect(js).toContain('Flag.On()');
   });
 
   it('transpiles for loop', () => {
@@ -152,14 +152,31 @@ describe('Transpiler', () => {
   });
 
   it('transpiles await expression', () => {
-    const ast = parse('async fn main() = await Promise.resolve(42)');
+    const ast = parse('async fn main() = await js.Promise.resolve(42)');
     const js = transpile(ast);
     const resultPromise = eval(js + '\nmain()');
     expect(resultPromise instanceof Promise).toBe(true);
   });
 
+  it('rejects implicit JavaScript global access without js namespace', () => {
+    const ast = parse('fn main() = parseInt("42")');
+    expect(() => transpile(ast)).toThrow(/Use js\.parseInt for JavaScript interop/);
+  });
+
+  it('allows JavaScript global access through js namespace', () => {
+    const ast = parse('fn main() = js.parseInt("42")');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(42);
+  });
+
+  it('rejects reserved js namespace redeclaration', () => {
+    const ast = parse('fn main(js) = js');
+    expect(() => transpile(ast)).toThrow(/reserved namespace/);
+  });
+
   it('transpiles pipe expression', () => {
-    const ast = parse('fn main() = [1, 2, 3] |> length');
+    const ast = parse('fn length(xs) = 3\nfn main() = [1, 2, 3] |> length');
     const js = transpile(ast);
     expect(js).toContain('length');
   });
@@ -277,6 +294,16 @@ describe('Transpiler', () => {
     expect(js).toContain('UserStatus');
     expect(js).toContain('id');
     expect(js).toContain('reason');
+  });
+
+  it('transpiles record type declaration', () => {
+    const ast = parse('type User = { name String, age Int ?? 18 }\nfn main() = User');
+    const js = transpile(ast);
+
+    expect(js).toContain('const User = {');
+    expect(js).toContain('name: String');
+    expect(js).toContain('age: Int = 18');
+    expect(js).not.toContain('createADT');
   });
 
   it('transpiles custom ADT instantiation and pattern matching', () => {
@@ -464,7 +491,7 @@ fn createStatus() = Status.Active`;
       '      x._variant',
       '    else:',
       '      x._variant ++ "(" ++ x._values.map((v) -> show(v)).join(", ") ++ ")"',
-      'fn main() = [show({_type: "Maybe", _variant: "Some", _values: Array.of(3)}), show({_type: "Maybe", _variant: "None", _values: Array.of()})]',
+      'fn main() = [show({_type: "Maybe", _variant: "Some", _values: js.Array.of(3)}), show({_type: "Maybe", _variant: "None", _values: js.Array.of()})]',
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
@@ -491,7 +518,7 @@ fn createStatus() = Status.Active`;
       'typeclass Convertible(a, b)',
       '  convert(x a) -> b',
       'impl Convertible for (String, Int)',
-      '  convert(x) = parseInt(x)',
+      '  convert(x) = js.parseInt(x)',
       'fn main() = convert("42")',
     ].join('\n');
     const ast = parse(src);

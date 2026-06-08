@@ -77,6 +77,23 @@ describe('Parser', () => {
     expect(ast.body[0].type).toBe('LetDecl');
   });
 
+  it('parses record type declaration with default value', () => {
+    const ast = parse('type User = { name String, age Int ?? 18 }');
+    const typeDecl = ast.body[0] as any;
+
+    expect(typeDecl.type).toBe('TypeDecl');
+    expect(typeDecl.name).toBe('User');
+    expect(typeDecl.recordFields).toBeDefined();
+    expect(typeDecl.recordFields).toHaveLength(2);
+    expect(typeDecl.recordFields[0].name).toBe('name');
+    expect(typeDecl.recordFields[0].fieldType.name).toBe('String');
+    expect(typeDecl.recordFields[0].default).toBeUndefined();
+    expect(typeDecl.recordFields[1].name).toBe('age');
+    expect(typeDecl.recordFields[1].fieldType.name).toBe('Int');
+    expect(typeDecl.recordFields[1].default?.type).toBe('NumberLiteral');
+    expect(typeDecl.recordFields[1].default?.value).toBe(18);
+  });
+
   it('parses block expression (not record) when body starts with let', () => {
     const ast = parse('fn f() = { let x = 1 x }');
     const fn = ast.body[0] as any;
