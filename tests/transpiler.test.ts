@@ -79,6 +79,32 @@ describe('Transpiler', () => {
     expect(result).toBe('two');
   });
 
+  it('supports implicit params tuple matching inside functions', () => {
+    const src = [
+      'fn bothTrue(a, b) =',
+      '  match params:',
+      '    (1, 1) -> 1 == 1',
+      '    _ -> 1 == 0',
+      'fn bothTrueViaParams(a, b) =',
+      '  match params:',
+      '    (1, 1) -> 1 == 1',
+      '    _ -> 1 == 0',
+      'fn main() = (bothTrue(1, 1), bothTrueViaParams(1, 0))',
+    ].join('\n');
+
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = normalizeListValue(eval(js + '\nmain()'));
+    expect(result).toEqual([true, false]);
+  });
+
+  it('treats bare nullary constructors as values', () => {
+    const src = 'fn main() = True';
+    const ast = parse(src);
+    const js = transpile(ast);
+    expect(js).toContain("typeof True === 'function'");
+  });
+
   it('transpiles for loop', () => {
     const ast = parse('fn main() =\n  for x in [1, 2, 3]:\n    x');
     const js = transpile(ast);
@@ -180,7 +206,7 @@ describe('Transpiler', () => {
   });
 
   it('transpiles unary expression', () => {
-    const ast = parse('fn main() = !true');
+    const ast = parse('fn main() = !(1 == 1)');
     const js = transpile(ast);
     const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toBe(false);
@@ -392,7 +418,7 @@ fn createStatus() = Status.Active`;
       '  map(x a, f) -> a',
       'impl Mapper for List',
       '  map(x, f) = x',
-      'fn main() = map(true, (x) -> x)',
+      'fn main() = map(1 == 1, (x) -> x)',
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);

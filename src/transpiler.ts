@@ -303,6 +303,7 @@ export class Transpiler {
     } else if (node.params.length === 0) {
       this.writeln(`${visibility}${asyncPrefix}function ${node.name}() {`);
       this.indent++;
+      this.emitImplicitArgAliases(node.params);
       
       if (node.body.type === 'BlockExpr') {
         const block = node.body as BlockExpr;
@@ -326,6 +327,7 @@ export class Transpiler {
       const params = node.params.map(p => p.name).join(', ');
       this.writeln(`${visibility}${asyncPrefix}function ${node.name}(${params}) {`);
       this.indent++;
+      this.emitImplicitArgAliases(node.params);
       
       if (node.body.type === 'BlockExpr') {
         const block = node.body as BlockExpr;
@@ -660,28 +662,7 @@ export class Transpiler {
       
       case 'Identifier': {
         const name = (node as Identifier).name;
-        const fullName = this.constructors.get(name);
-        if (fullName) {
-          const fieldNames = this.variantFieldNames.get(name);
-          if (fieldNames && fieldNames.length === 0) {
-            return `${fullName}()`;
-          }
-          return fullName;
-        }
-        
-        const namespace = this.importedNames.get(name);
-        if (namespace) {
-          return namespace ? `${namespace}.${name}` : name;
-        }
-
-        if (name === 'Nil') {
-          return '__listNil';
-        }
-        if (name === 'Cons') {
-          return '__listCons';
-        }
-        
-        return name;
+        return this.resolveIdentifierReference(name, true);
       }
       
       case 'BinaryExpr': {
@@ -748,7 +729,9 @@ export class Transpiler {
       
       case 'CallExpr': {
         const call = node as CallExpr;
-        let calleeStr = this.transpileExpr(call.callee);
+        let calleeStr = call.callee.type === 'Identifier'
+          ? this.resolveIdentifierReference((call.callee as Identifier).name, false)
+          : this.transpileExpr(call.callee);
         let isPrintCall = false;
         
         // Detect print() usage and mark runtime as needed
@@ -826,7 +809,12 @@ export class Transpiler {
           const op = getOperator(bin.operator);
           return `(_left, _right) => (_left ${op} _right)`;
         }
-        return `(${params}) => ${body}`;
+        const paramNames = new Set(fn.params.map(p => p.name));
+        const aliasLines: string[] = ['const __args = Array.from(arguments);'];
+        if (!paramNames.has('params')) {
+          aliasLines.push('const params = __args;');
+        }
+        return `function(${params}) { ${aliasLines.join(' ')} return ${body}; }`;
       }
       
       case 'IfExpr': {
@@ -1095,6 +1083,58 @@ export class Transpiler {
     return result;
   }
 
+  private emitImplicitArgAliases(params: Param[]): void {
+    this.emitImplicitArgAliasesForNames(params.map(p => p.name));
+  }
+
+  private emitImplicitArgAliasesForNames(paramNamesList: string[]): void {
+    const paramNames = new Set(paramNamesList);
+    this.writeln('const __args = Array.from(arguments);');
+    if (!paramNames.has('params')) {
+      this.writeln('const params = __args;');
+    }
+  }
+
+  private materializeNullaryConstructor(reference: string): string {
+    return `((typeof ${reference} === 'function' && ${reference}.length === 0) ? ${reference}() : ${reference})`;
+  }
+
+  private resolveIdentifierReference(name: string, materializeConstructorValue: boolean): string {
+    const fullName = this.constructors.get(name);
+    if (fullName) {
+      const fieldNames = this.variantFieldNames.get(name);
+      if (fieldNames && fieldNames.length === 0) {
+        return `${fullName}()`;
+      }
+      if (materializeConstructorValue && /^[A-Z]/.test(name)) {
+        return this.materializeNullaryConstructor(fullName);
+      }
+      return fullName;
+    }
+
+    const namespace = this.importedNames.get(name);
+    if (namespace) {
+      const resolved = namespace ? `${namespace}.${name}` : name;
+      if (materializeConstructorValue && /^[A-Z]/.test(name)) {
+        return this.materializeNullaryConstructor(resolved);
+      }
+      return resolved;
+    }
+
+    if (name === 'Nil') {
+      return '__listNil';
+    }
+    if (name === 'Cons') {
+      return '__listCons';
+    }
+
+    if (materializeConstructorValue && /^[A-Z]/.test(name)) {
+      return this.materializeNullaryConstructor(name);
+    }
+
+    return name;
+  }
+
   private emitListHelpers(): void {
     this.writeln('const __listIterator = function* (start) {');
     this.indent++;
@@ -1212,9 +1252,15 @@ export class Transpiler {
     // For Convertible for (Int, String), we generate something like:
     // registerInstance('Convertible', ['Int', 'String'], { convert: (x) => x.toString() });
     
+    const renderForType = (typeNode: Node): string => {
+      if (typeNode.type === 'Identifier') {
+        return (typeNode as Identifier).name;
+      }
+      return this.transpileExpr(typeNode);
+    };
     const forTypesStr = node.forTypes.length === 1 
-      ? this.transpileExpr(node.forTypes[0])
-      : `[${node.forTypes.map(t => this.transpileExpr(t)).join(', ')}]`;
+      ? renderForType(node.forTypes[0])
+      : `[${node.forTypes.map(t => renderForType(t)).join(', ')}]`;
     
     this.writeln(`// Instance: ${node.typeclass} for ${forTypesStr}`);
     
@@ -1241,18 +1287,24 @@ export class Transpiler {
     // First, add the implemented methods
     for (const method of node.methods) {
       // Use parameter names from the implementation if available, otherwise from typeclass
-      let paramList = 'x';
+      let paramNames = ['x'];
       if (method.params && method.params.length > 0) {
-        paramList = method.params.join(', ');
+        paramNames = [...method.params];
       } else if (typeclass) {
         const tcMethod = typeclass.methods.find(m => m.name === method.name);
         if (tcMethod && tcMethod.params.length > 0) {
-          paramList = tcMethod.params.map(p => p.name || 'arg').join(', ');
+          paramNames = tcMethod.params.map(p => p.name || 'arg');
         }
       }
+      const paramList = paramNames.join(', ');
       
       const methodBody = this.transpileExpr(method.body);
-      this.writeln(`${method.name}: function(${paramList}) { return ${methodBody}; },`);
+      this.writeln(`${method.name}: function(${paramList}) {`);
+      this.indent++;
+      this.emitImplicitArgAliasesForNames(paramNames);
+      this.writeln(`return ${methodBody};`);
+      this.indent--;
+      this.writeln('},');
     }
     
     // Then, add default implementations from the typeclass for methods not implemented
@@ -1266,7 +1318,12 @@ export class Transpiler {
           
           // Generate inline function for default implementation
           const methodBody = this.transpileExpr(method.body);
-          this.writeln(`${method.name}: function(${paramList}) { return ${methodBody}; },`);
+          this.writeln(`${method.name}: function(${paramList}) {`);
+          this.indent++;
+          this.emitImplicitArgAliasesForNames(paramNames);
+          this.writeln(`return ${methodBody};`);
+          this.indent--;
+          this.writeln('},');
         }
       }
     }

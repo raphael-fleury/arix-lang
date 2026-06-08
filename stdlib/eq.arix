@@ -2,6 +2,8 @@
 Eq typeclass and core instances for primitive types.
 """
 
+import bool(True, False)
+
 typeclass Eq(a)
   eq(x a, y a) -> Bool
   notEq(x a, y a) -> Bool = !(eq(x, y))
@@ -17,12 +19,7 @@ impl Eq for String
 
 impl Eq for Bool
   eq(x, y) =
-    match x:
-      True ->
-        match y:
-          True -> True
-          False -> False
-      False ->
-        match y:
-          True -> False
-          False -> True
+    match params:
+      (True, True) -> True
+      (False, False) -> True
+      (_, _) -> False
