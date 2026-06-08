@@ -127,10 +127,10 @@ describe('Lexer', () => {
     expect(ids).toEqual(['Ok', 'value', 'Err', 'e', 'Some', 'x', 'None']);
   });
 
-  it('tokenizes boolean values as KEYWORD', () => {
+  it('tokenizes true/false as identifiers', () => {
     const tokens = tokenize('true false');
-    const keywords = tokens.filter(t => t.type === 'KEYWORD').map(t => t.value);
-    expect(keywords).toEqual(['true', 'false']);
+    const identifiers = tokens.filter(t => t.type === 'IDENTIFIER').map(t => t.value);
+    expect(identifiers).toEqual(['true', 'false']);
   });
 
   it('treats unsupported control-flow words as identifiers', () => {

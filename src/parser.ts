@@ -719,10 +719,6 @@ class Parser {
     }
 
     if (token.type === 'KEYWORD') {
-      if (token.value === 'true' || token.value === 'false') {
-        this.advance();
-        return { type: 'BooleanLiteral', value: token.value === 'true' } as BooleanLiteral;
-      }
       if (token.value === 'None') {
         this.advance();
         return { type: 'NoneLiteral' } as NoneLiteral;
@@ -836,8 +832,7 @@ class Parser {
     const savedToken = this.current();
     
     if (savedToken.type === 'NUMBER' || savedToken.type === 'STRING' || 
-        savedToken.type === 'IDENTIFIER' || savedToken.value === 'true' || 
-        savedToken.value === 'false' || savedToken.value === 'None') {
+      savedToken.type === 'IDENTIFIER' || savedToken.value === 'None') {
       // Use parsePrimary to avoid consuming too much
       const right = this.parsePrimary();
       return { 
