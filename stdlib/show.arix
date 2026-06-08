@@ -16,3 +16,13 @@ impl Show for Boolean
 
 impl Show for String
   show(x) = x
+
+fn showAdtValues(values) =
+  values.map((v) -> show(v)).join(", ")
+
+impl Show for ADT
+  show(x) =
+    if x._values.length == 0:
+      x._variant
+    else:
+      x._variant ++ "(" ++ showAdtValues(x._values) ++ ")"
