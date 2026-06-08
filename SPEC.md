@@ -371,6 +371,7 @@ impl Convertible for (Int, String)
 **Rules:**
 - `impl Typeclass for ConcreteType` for single-parameter typeclasses
 - `impl Typeclass for (Type1, Type2)` for multi-parameter typeclasses
+- `impl Typeclass for ADT` defines an instance that applies to any ADT value
 - All non-default methods must be implemented
 - Default methods are inherited automatically
 - Method bodies are single expressions

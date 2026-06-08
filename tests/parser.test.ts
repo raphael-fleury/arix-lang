@@ -352,6 +352,19 @@ describe('Parser', () => {
     expect(inst.methods.length).toBe(2);
   });
 
+  it('parses instance declaration for ADT base type', () => {
+    const src = [
+      'impl Show for ADT',
+      '  show(x) = x._variant',
+    ].join('\n');
+    const ast = parse(src);
+    const inst = ast.body[0] as any;
+    expect(inst.typeclass).toBe('Show');
+    expect(inst.forTypes.length).toBe(1);
+    expect(inst.forTypes[0].type).toBe('Identifier');
+    expect(inst.forTypes[0].name).toBe('ADT');
+  });
+
   it('parses function with where constraints', () => {
     const src = 'fn printValue(x) where Show(x) = print(show(x))';
     const ast = parse(src);

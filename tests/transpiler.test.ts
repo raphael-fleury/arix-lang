@@ -395,6 +395,53 @@ fn createStatus() = Status.Active`;
     expect(() => evalTranspiled(js)).toThrow(/No instance of Mapper found/);
   });
 
+  it('dispatches a typeclass instance declared for ADT to any ADT value', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for ADT',
+      '  show(x) = x._type ++ ":" ++ x._variant',
+      'fn main() = [show({_type: "Status", _variant: "Active"}), show({_type: "Direction", _variant: "North"})]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = evalTranspiled(js);
+    expect(result).toEqual(['Status:Active', 'Direction:North']);
+  });
+
+  it('does not match ADT instance dispatch for non-ADT values', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for ADT',
+      '  show(x) = x._variant',
+      'fn main() = show(42)',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    expect(() => evalTranspiled(js)).toThrow(/No instance of Show found/);
+  });
+
+  it('formats ADT variants as Variant(args) and nullary variants as Variant', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  show(x a) -> String',
+      'impl Show for Int',
+      '  show(x) = x.toString()',
+      'impl Show for ADT',
+      '  show(x) =',
+      '    if x._values.length == 0:',
+      '      x._variant',
+      '    else:',
+      '      x._variant ++ "(" ++ x._values.map((v) -> show(v)).join(", ") ++ ")"',
+      'fn main() = [show({_type: "Maybe", _variant: "Some", _values: Array.of(3)}), show({_type: "Maybe", _variant: "None", _values: Array.of()})]',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = evalTranspiled(js);
+    expect(result).toEqual(['Some(3)', 'None']);
+  });
+
   it('transpiles typeclass with two type parameters', () => {
     const src = [
       'typeclass Convertible(a, b)',

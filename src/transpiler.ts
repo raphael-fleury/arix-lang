@@ -1362,6 +1362,8 @@ export class Transpiler {
     if (!typeName) return 'true';
     
     switch (typeName) {
+      case 'ADT':
+        return `${valueRef} && typeof ${valueRef} === "object" && typeof ${valueRef}._type === "string" && typeof ${valueRef}._variant === "string"`;
       case 'Int':
         return `Number.isInteger(${valueRef})`;
       case 'String':
