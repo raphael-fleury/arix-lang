@@ -3,6 +3,7 @@ List utilities for working with immutable lists.
 """
 
 import maybe(Maybe, Some, None)
+import bool(True, False)
 import monoid(Monoid)
 import functor(Functor)
 import applicative(Applicative)
@@ -34,8 +35,8 @@ public fn length(xs) =
 
 public fn isEmpty(xs) =
     match xs:
-        [] -> true
-        _ -> false
+        [] -> True
+        _ -> False
 
 fn showListTail(xs) =
     match xs:

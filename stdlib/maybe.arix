@@ -6,6 +6,7 @@ import monoid(Monoid)
 import functor(Functor)
 import applicative(Applicative)
 import monad(Monad)
+import bool(True, False)
 
 type Maybe(a) = Some(value: a) | None
 
@@ -16,8 +17,8 @@ public fn getOrElse(value, defaultValue) =
 
 public fn isSome(value) =
     match value:
-        Some(_) -> true
-        None -> false
+        Some(_) -> True
+        None -> False
 
 impl Monoid for Maybe
     empty(x) = None

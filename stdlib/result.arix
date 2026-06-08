@@ -2,6 +2,7 @@ import monoid(Monoid)
 import functor(Functor)
 import applicative(Applicative)
 import monad(Monad)
+import bool(True, False)
 
 type Result(a, e) = Ok(value: a) | Err(error: e)
 
@@ -12,8 +13,8 @@ public fn getOrElse(result, defaultValue) =
 
 public fn isOk(result) =
     match result:
-        Ok(_) -> true
-        Err(_) -> false
+        Ok(_) -> True
+        Err(_) -> False
 
 impl Monoid for Result
     empty(x) = Err(null)

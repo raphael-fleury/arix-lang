@@ -13,7 +13,7 @@ const __dirname = dirname(__filename);
 const RUNTIME_SOURCE = join(__dirname, '..', 'runtime', 'arix-runtime.js');
 
 const STD_LIB_DIR = join(__dirname, '..', 'stdlib');
-const STDLIB_MODULES = ['result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+const STDLIB_MODULES = ['bool', 'eq', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
 
 interface ModuleInfo {
   filePath: string;

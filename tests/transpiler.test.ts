@@ -3,6 +3,10 @@ import { transpile } from '../src/transpiler.js';
 import { parse } from '../src/parser.js';
 
 function normalizeListValue(value: unknown): unknown {
+  if (value && typeof value === 'object' && (value as any)._type === 'Bool') {
+    return (value as any)._variant === 'True';
+  }
+
   if (value && typeof value === 'object' && (value as any)._type === 'List') {
     const result: unknown[] = [];
     let current: any = value;
@@ -178,7 +182,7 @@ describe('Transpiler', () => {
   it('transpiles unary expression', () => {
     const ast = parse('fn main() = !true');
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toBe(false);
   });
 
@@ -220,7 +224,7 @@ describe('Transpiler', () => {
   it('transpiles binary operators', () => {
     const ast = parse('fn main() = (5 == 5) && (3 != 4) || (2 > 3)');
     const js = transpile(ast);
-    const result = eval(js + '\nmain()');
+    const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toBe(true);
   });
 

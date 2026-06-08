@@ -1,0 +1,28 @@
+"""
+Eq typeclass and core instances for primitive types.
+"""
+
+typeclass Eq(a)
+  eq(x a, y a) -> Bool
+  notEq(x a, y a) -> Bool = !(eq(x, y))
+
+impl Eq for Int
+  eq(x, y) = x == y
+
+impl Eq for Float
+  eq(x, y) = x == y
+
+impl Eq for String
+  eq(x, y) = x == y
+
+impl Eq for Bool
+  eq(x, y) =
+    match x:
+      True ->
+        match y:
+          True -> True
+          False -> False
+      False ->
+        match y:
+          True -> False
+          False -> True

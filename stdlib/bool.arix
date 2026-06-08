@@ -1,0 +1,5 @@
+"""
+Bool - canonical boolean ADT.
+"""
+
+type Bool = True | False

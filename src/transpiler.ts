@@ -42,7 +42,7 @@ import type {
 const RUNTIME_IMPORT = (relativePath: string) => 
   `import { createADT, print } from '${relativePath}';`;
 
-const STDLIB_MODULES = ['result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+const STDLIB_MODULES = ['bool', 'eq', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
 
 interface GlobalInstanceInfo {
   typeclass: string;
@@ -75,6 +75,7 @@ export class Transpiler {
   private variantFieldNames: Map<string, string[]> = new Map();
   private instanceCounter = 0;
   private globalInstances: GlobalInstanceInfo[] = [];
+  private needsBoolHelpers = false;
 
   setOutputDir(dir: string): void {
     this.outputDir = dir;
@@ -99,6 +100,7 @@ export class Transpiler {
     this.instanceCounter = 0;
     this.currentFilePath = filePath;
     this.needsRuntime = false;
+    this.needsBoolHelpers = false;
 
     const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
     const implicitStdlibImports = this.getImplicitStdlibImports(explicitImports);
@@ -177,6 +179,22 @@ export class Transpiler {
       if (node.type !== 'TypeclassDecl' && node.type !== 'InstanceDecl') {
         this.transpileNode(node);
       }
+    }
+
+    // Add inline Bool helpers when Bool semantics are used.
+    if (this.needsBoolHelpers) {
+      const boolHelpers = [
+        'const __boolIs = (v) => v && v._type === \'Bool\' && (v._variant === \'True\' || v._variant === \'False\');',
+        'const __boolTrue = () => ({ _type: \'Bool\', _variant: \'True\', _values: [] });',
+        'const __boolFalse = () => ({ _type: \'Bool\', _variant: \'False\', _values: [] });',
+        'const __boolFromJs = (v) => (v ? __boolTrue() : __boolFalse());',
+        'const __boolToJs = (v) => __boolIs(v) ? v._variant === \'True\' : (typeof v === \'boolean\' ? v : Boolean(v));',
+        'const __boolNot = (v) => __boolFromJs(!__boolToJs(v));',
+        'const __valueEq = (a, b) => __boolFromJs((__boolIs(a) || __boolIs(b)) ? (__boolToJs(a) === __boolToJs(b)) : (a === b));',
+        'const __valueNe = (a, b) => __boolFromJs((__boolIs(a) || __boolIs(b)) ? (__boolToJs(a) !== __boolToJs(b)) : (a !== b));',
+        ''
+      ].join('\n');
+      this.output = boolHelpers + this.output;
     }
 
     // Add ESM imports at the top (including runtime import if needed)
@@ -634,7 +652,8 @@ export class Transpiler {
         return `"${str}"`;
       
       case 'BooleanLiteral':
-        return String((node as BooleanLiteral).value);
+        this.needsBoolHelpers = true;
+        return (node as BooleanLiteral).value ? '__boolTrue()' : '__boolFalse()';
       
       case 'NoneLiteral':
         return 'null';
@@ -678,16 +697,24 @@ export class Transpiler {
         }
         
         if (bin.operator === '||') {
-          return `(${left} || ${right})`;
+          this.needsBoolHelpers = true;
+          return `(__boolToJs(${left}) ? __boolTrue() : __boolFromJs(${right}))`;
         }
         if (bin.operator === '&&') {
-          return `(${left} && ${right})`;
+          this.needsBoolHelpers = true;
+          return `(__boolToJs(${left}) ? __boolFromJs(${right}) : __boolFalse())`;
         }
         if (bin.operator === '==') {
-          return `(${left} === ${right})`;
+          this.needsBoolHelpers = true;
+          return `__valueEq(${left}, ${right})`;
         }
         if (bin.operator === '!=') {
-          return `(${left} !== ${right})`;
+          this.needsBoolHelpers = true;
+          return `__valueNe(${left}, ${right})`;
+        }
+        if (bin.operator === '<' || bin.operator === '>' || bin.operator === '<=' || bin.operator === '>=') {
+          this.needsBoolHelpers = true;
+          return `__boolFromJs(${left} ${bin.operator} ${right})`;
         }
         if (bin.operator === '++') {
           return `(${left} + ${right})`;
@@ -698,6 +725,10 @@ export class Transpiler {
       case 'UnaryExpr': {
         const unary = node as UnaryExpr;
         const operand = this.transpileExpr(unary.operand);
+        if (unary.operator === '!') {
+          this.needsBoolHelpers = true;
+          return `__boolNot(${operand})`;
+        }
         return `${unary.operator}${operand}`;
       }
       
@@ -803,7 +834,8 @@ export class Transpiler {
         const condition = this.transpileExpr(ifExpr.condition);
         const thenBranch = this.transpileExpr(ifExpr.thenBranch);
         const elseBranch = this.transpileExpr(ifExpr.elseBranch);
-        return `((${condition}) ? ${thenBranch} : ${elseBranch})`;
+        this.needsBoolHelpers = true;
+        return `(__boolToJs(${condition}) ? ${thenBranch} : ${elseBranch})`;
       }
       
       case 'MatchExpr': {
@@ -868,7 +900,8 @@ export class Transpiler {
         this.indent++;
         if (forExpr.condition) {
           const condition = this.transpileExpr(forExpr.condition);
-          loopCode += this.getIndent() + `if (!(${condition})) continue;\n`;
+          this.needsBoolHelpers = true;
+          loopCode += this.getIndent() + `if (!__boolToJs(${condition})) continue;\n`;
         }
         loopCode += this.getIndent() + body;
         this.indent--;
@@ -880,7 +913,8 @@ export class Transpiler {
         const whileExpr = node as WhileExpr;
         const condition = this.transpileExpr(whileExpr.condition);
         const body = this.transpileExpr(whileExpr.body);
-        let loopCode = `while (${condition}) {\n`;
+        this.needsBoolHelpers = true;
+        let loopCode = `while (__boolToJs(${condition})) {\n`;
         this.indent++;
         loopCode += this.getIndent() + body;
         this.indent--;
@@ -908,10 +942,11 @@ export class Transpiler {
         if (comp.condition) {
           guardParts.push(`(${this.transpileExpr(comp.condition)})`);
         }
-        const guard = guardParts.length > 0 ? guardParts.join(' && ') : 'true';
+        const guard = guardParts.length > 0 ? guardParts.join(' && ') : '__boolTrue()';
+        this.needsBoolHelpers = true;
         const allBindings = [refs, bindings].filter(Boolean).join('; ');
         const bindingBlock = allBindings ? `${allBindings}; ` : '';
-        return `((__list) => { const __go = (__xs) => { if (!(__xs && __xs._variant === 'Cons')) { return __listNil; } const __head = __xs.head; const __tail = __xs.tail; ${bindingBlock}if (${guard}) { return __listCons(${element}, __go(__tail)); } return __go(__tail); }; return __go(__list); })(${iterable})`;
+        return `((__list) => { const __go = (__xs) => { if (!(__xs && __xs._variant === 'Cons')) { return __listNil; } const __head = __xs.head; const __tail = __xs.tail; ${bindingBlock}if (__boolToJs(${guard})) { return __listCons(${element}, __go(__tail)); } return __go(__tail); }; return __go(__list); })(${iterable})`;
       }
       
       case 'StringInterpolation': {
@@ -941,7 +976,8 @@ export class Transpiler {
       const body = this.transpileExpr(arm.body);
       let guardCondition = condition;
       if (arm.guard) {
-        const guard = this.transpileExpr(arm.guard.condition);
+        const guard = `__boolToJs(${this.transpileExpr(arm.guard.condition)})`;
+        this.needsBoolHelpers = true;
         guardCondition = guardCondition ? `(${guardCondition} && ${guard})` : guard;
       }
       return { bindings, condition: guardCondition, body, refs };
@@ -970,6 +1006,11 @@ export class Transpiler {
       case 'IdentifierPattern':
         return { bindings: '', condition: '', refs: `const ${pattern.name} = ${value}` };
       case 'LiteralPattern':
+        if (pattern.literal.type === 'BooleanLiteral') {
+          this.needsBoolHelpers = true;
+          const lit = this.transpileExpr(pattern.literal);
+          return { bindings: '', condition: `(__boolToJs(${value}) === __boolToJs(${lit}))`, refs: '' };
+        }
         return { bindings: '', condition: `${value} === ${this.transpileExpr(pattern.literal)}`, refs: '' };
       case 'RecordPattern': {
         const conds: string[] = [];
@@ -1369,7 +1410,9 @@ export class Transpiler {
       case 'String':
         return `typeof ${valueRef} === "string"`;
       case 'Boolean':
-        return `typeof ${valueRef} === "boolean"`;
+        return `(${valueRef} && ${valueRef}._type === 'Bool') || typeof ${valueRef} === "boolean"`;
+      case 'Bool':
+        return `${valueRef} && ${valueRef}._type === 'Bool'`;
       case 'Float':
         return `typeof ${valueRef} === "number" && !Number.isInteger(${valueRef})`;
       case 'List':
