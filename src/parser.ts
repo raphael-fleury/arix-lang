@@ -1448,6 +1448,10 @@ class Parser {
     // Parse method implementations
     const methods: MethodImpl[] = [];
     while (this.current().type !== 'DEDENT' && this.current().type !== 'EOF') {
+      if (!this.isInstanceMethodStart()) {
+        break;
+      }
+
       if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
         break;
       }
@@ -1494,6 +1498,33 @@ class Parser {
       this.advance();
     }
     return { type: 'InstanceDecl', typeclass, forTypes, constraints, methods };
+  }
+
+  private isInstanceMethodStart(): boolean {
+    if (this.current().type !== 'IDENTIFIER') {
+      return false;
+    }
+    if (this.peek().value !== '(') {
+      return false;
+    }
+
+    let i = this.pos + 1;
+    let depth = 0;
+    while (i < this.tokens.length) {
+      const token = this.tokens[i];
+      if (token.value === '(') {
+        depth++;
+      } else if (token.value === ')') {
+        depth--;
+        if (depth === 0) {
+          const next = this.tokens[i + 1];
+          return next?.type === 'OPERATOR' && next.value === '=';
+        }
+      }
+      i++;
+    }
+
+    return false;
   }
 
   private parseConstraints(): Constraint[] {
