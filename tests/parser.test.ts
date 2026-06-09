@@ -2,6 +2,28 @@ import { describe, it, expect } from 'vitest';
 import { parse } from '../src/parser.js';
 
 describe('Parser', () => {
+  it('parses function decorator without arguments', () => {
+    const ast = parse('@Test\nfn testDivisionBy0() = 1');
+    const fn = ast.body[0] as any;
+    expect(fn.type).toBe('FunctionDecl');
+    expect(fn.decorators).toBeDefined();
+    expect(fn.decorators).toHaveLength(1);
+    expect(fn.decorators[0].name).toBe('Test');
+    expect(fn.decorators[0].args).toEqual([]);
+  });
+
+  it('parses function decorator with arguments', () => {
+    const ast = parse('@Operator("**", "infixl", 7)\nfn pow(a, b) = a');
+    const fn = ast.body[0] as any;
+    expect(fn.type).toBe('FunctionDecl');
+    expect(fn.decorators).toHaveLength(1);
+    expect(fn.decorators[0].name).toBe('Operator');
+    expect(fn.decorators[0].args).toHaveLength(3);
+    expect(fn.decorators[0].args[0].type).toBe('StringLiteral');
+    expect(fn.decorators[0].args[1].type).toBe('StringLiteral');
+    expect(fn.decorators[0].args[2].type).toBe('NumberLiteral');
+  });
+
   it('parses function declaration', () => {
     const ast = parse('fn add(a, b) = a + b');
     expect(ast.body[0].type).toBe('FunctionDecl');

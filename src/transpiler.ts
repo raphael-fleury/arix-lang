@@ -34,6 +34,7 @@ import type {
   WhileExpr,
   BreakExpr,
   ContinueExpr,
+  Decorator,
   ListComprehension,
   StringInterpolation,
 } from './ast.js';
@@ -77,6 +78,7 @@ export class Transpiler {
   private instanceCounter = 0;
   private globalInstances: GlobalInstanceInfo[] = [];
   private needsBoolHelpers = false;
+  private needsDecoratorHelpers = false;
   private scopeStack: Set<string>[] = [];
 
   setOutputDir(dir: string): void {
@@ -103,6 +105,7 @@ export class Transpiler {
     this.currentFilePath = filePath;
     this.needsRuntime = false;
     this.needsBoolHelpers = false;
+    this.needsDecoratorHelpers = false;
     this.scopeStack = [new Set()];
 
     const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
@@ -219,6 +222,47 @@ export class Transpiler {
       this.output = boolHelpers + this.output;
     }
 
+    if (this.needsDecoratorHelpers) {
+      const decoratorHelpers = [
+        'const __arixMemoize = (fn) => {',
+        '  const cache = new Map();',
+        '  return function(...args) {',
+        '    const key = JSON.stringify(args);',
+        '    if (cache.has(key)) return cache.get(key);',
+        '    const result = fn.apply(this, args);',
+        '    cache.set(key, result);',
+        '    return result;',
+        '  };',
+        '};',
+        'const __arixDeprecated = (fn, message) => function(...args) {',
+        '  console.warn(`Deprecated function call${message ? `: ${message}` : ""}`);',
+        '  return fn.apply(this, args);',
+        '};',
+        'const __applyArixDecorators = (fn, decorators) => {',
+        '  let decorated = fn;',
+        '  for (let i = decorators.length - 1; i >= 0; i--) {',
+        '    const dec = decorators[i] || {};',
+        '    const kind = typeof dec.name === "string" ? dec.name.toLowerCase() : "";',
+        '    if (kind === "memo") {',
+        '      decorated = __arixMemoize(decorated);',
+        '      continue;',
+        '    }',
+        '    if (kind === "deprecated") {',
+        '      decorated = __arixDeprecated(decorated, dec.args && dec.args.length > 0 ? dec.args[0] : undefined);',
+        '      continue;',
+        '    }',
+        '    if (kind === "inline") {',
+        '      continue;',
+        '    }',
+        '  }',
+        '  decorated._decorators = decorators;',
+        '  return decorated;',
+        '};',
+        ''
+      ].join('\n');
+      this.output = decoratorHelpers + this.output;
+    }
+
     // Add ESM imports at the top (including runtime import if needed)
     let topImports: string[] = [];
     
@@ -327,7 +371,15 @@ export class Transpiler {
         return this.transpileExpr(fnExpr.body);
       });
       const params = fnExpr.params.map(p => p.name).join(', ');
-      this.writeln(`${visibility}const ${node.name} = (${params}) => ${body};`);
+      if ((node.decorators?.length || 0) > 0) {
+        this.writeln(`${visibility}function ${node.name}(${params}) {`);
+        this.indent++;
+        this.writeln(`return ${body};`);
+        this.indent--;
+        this.writeln('}');
+      } else {
+        this.writeln(`${visibility}const ${node.name} = (${params}) => ${body};`);
+      }
     } else if (node.params.length === 0) {
       this.writeln(`${visibility}${asyncPrefix}function ${node.name}() {`);
       this.indent++;
@@ -384,7 +436,21 @@ export class Transpiler {
       this.indent--;
       this.writeln('}');
     }
+
+    if ((node.decorators?.length || 0) > 0) {
+      this.needsDecoratorHelpers = true;
+      this.writeln(`${node.name} = __applyArixDecorators(${node.name}, ${this.transpileDecorators(node.decorators || [])});`);
+    }
+
     this.writeln();
+  }
+
+  private transpileDecorators(decorators: Decorator[]): string {
+    const entries = decorators.map(dec => {
+      const args = dec.args.map(arg => this.transpileExpr(arg)).join(', ');
+      return `{ name: ${JSON.stringify(dec.name)}, args: [${args}] }`;
+    });
+    return `[${entries.join(', ')}]`;
   }
 
   private transpileLetDecl(node: LetDecl): void {

@@ -40,6 +40,7 @@ import type {
   WhileExpr,
   BreakExpr,
   ContinueExpr,
+  Decorator,
   Param,
   Pattern,
   Guard,
@@ -95,64 +96,96 @@ class Parser {
 
   private parseStatement(): Node | null {
     this.skipNewlines();
+    const decorators = this.parseDecorators();
     const token = this.current();
 
     if (token.type === 'KEYWORD') {
       switch (token.value) {
         case 'fn':
-          return this.parseFunctionDecl();
+          return this.parseFunctionDecl(decorators);
         case 'async':
-          return this.parseAsyncFunctionDecl();
+          return this.parseAsyncFunctionDecl(decorators);
         case 'let':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseLetDecl();
         case 'type':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseTypeDecl();
         case 'typeclass':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseTypeclassDecl();
         case 'impl':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseInstanceDecl();
         case 'import':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseImportStmt();
         case 'public':
         case 'internal':
-          return this.parseVisibilityStatement();
+          return this.parseVisibilityStatement(decorators);
         case 'for':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseFor();
         case 'while':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseWhile();
         case 'break':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseBreak();
         case 'continue':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
           return this.parseContinue();
       }
+    }
+
+    if (decorators.length > 0) {
+      throw new Error('Decorators must be followed by a function declaration');
     }
 
     return this.parseExpr();
   }
 
-  private parseAsyncFunctionDecl(): FunctionDecl {
+  private parseAsyncFunctionDecl(decorators: Decorator[] = []): FunctionDecl {
     this.advance(); // consume 'async'
-    const fn = this.parseFunctionDecl();
+    const fn = this.parseFunctionDecl(decorators);
     fn.isAsync = true;
     return fn;
   }
 
-  private parseVisibilityStatement(): Node {
+  private parseVisibilityStatement(decorators: Decorator[] = []): Node {
     const visibility = this.advance().value as 'public' | 'internal';
     if (this.current().value === 'fn') {
-      const fn = this.parseFunctionDecl();
+      const fn = this.parseFunctionDecl(decorators);
       (fn as FunctionDecl).visibility = visibility;
       return fn;
     }
     if (this.current().value === 'async') {
-      const fn = this.parseAsyncFunctionDecl();
+      const fn = this.parseAsyncFunctionDecl(decorators);
       fn.visibility = visibility;
       return fn;
     }
     throw new Error(`Expected 'fn' after visibility modifier`);
   }
 
-  private parseFunctionDecl(): FunctionDecl {
+  private parseFunctionDecl(decorators: Decorator[] = []): FunctionDecl {
     // Consume 'fn' if present (not present when called from parseAsyncFunctionDecl)
     if (this.current().value === 'fn') {
       this.advance();
@@ -212,9 +245,47 @@ class Parser {
       body,
       returnType,
       constraints,
+      decorators,
       visibility: 'private',
       isAsync,
     };
+  }
+
+  private parseDecorators(): Decorator[] {
+    const decorators: Decorator[] = [];
+
+    while (this.current().type === 'DECORATOR') {
+      const token = this.advance();
+      const args: Node[] = [];
+
+      if (this.current().value === '(') {
+        this.advance();
+        this.skipNewlines();
+        while (this.current().value !== ')') {
+          args.push(this.parseExpr());
+          this.skipNewlines();
+          if (this.current().value === ',') {
+            this.advance();
+            this.skipNewlines();
+          } else {
+            break;
+          }
+        }
+        this.expect('PUNCTUATION', ')');
+      }
+
+      decorators.push({
+        type: 'Decorator',
+        name: token.value,
+        args,
+        line: token.line,
+        column: token.column,
+      });
+
+      this.skipNewlines();
+    }
+
+    return decorators;
   }
   
   private parseBlockBody(): BlockExpr {

@@ -18,6 +18,18 @@ describe('Lexer', () => {
     expect(values).toEqual(['fn', 'main', '(', ')', '=', '1']);
   });
 
+  it('tokenizes decorators with Java-style names', () => {
+    const tokens = tokenize('@Test\nfn test() = 1');
+    const decorators = tokens.filter(t => t.type === 'DECORATOR').map(t => t.value);
+    expect(decorators).toEqual(['Test']);
+  });
+
+  it('tokenizes decorator with arguments', () => {
+    const tokens = tokenize('@Operator("**", "infixl", 7)\nfn pow(a, b) = a');
+    const decorators = tokens.filter(t => t.type === 'DECORATOR').map(t => t.value);
+    expect(decorators).toEqual(['Operator']);
+  });
+
   it('tokenizes string interpolation', () => {
     const tokens = tokenize('"Hello ${name}"');
     expect(tokens[0].value).toBe('Hello ${name}');

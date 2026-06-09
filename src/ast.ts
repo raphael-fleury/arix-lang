@@ -36,6 +36,7 @@ export type NodeType =
   | 'WhileExpr'
   | 'BreakExpr'
   | 'ContinueExpr'
+  | 'Decorator'
   | 'Pattern'
   | 'Guard'
   | 'Param'
@@ -138,8 +139,15 @@ export interface FunctionDecl extends Node {
   body: Node;
   returnType?: Node;
   constraints?: Constraint[];
+  decorators?: Decorator[];
   visibility: 'public' | 'internal' | 'private';
   isAsync: boolean;
+}
+
+export interface Decorator extends Node {
+  type: 'Decorator';
+  name: string;
+  args: Node[];
 }
 
 export interface Param {

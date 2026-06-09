@@ -2,6 +2,7 @@ export type TokenType =
   | 'NUMBER'
   | 'STRING'
   | 'INTERPOLATED_STRING'
+  | 'DECORATOR'
   | 'IDENTIFIER'
   | 'KEYWORD'
   | 'OPERATOR'
@@ -304,6 +305,21 @@ export function tokenize(source: string): Token[] {
       }
       const type = keywords.has(value as typeof KEYWORDS[number]) ? 'KEYWORD' : 'IDENTIFIER';
       tokens.push({ type, value, line, column });
+      continue;
+    }
+
+    // Decorators/annotations: @Name
+    if (char === '@' && /[a-zA-Z_]/.test(source[pos + 1] || '')) {
+      const tokenColumn = column;
+      pos++;
+      column++;
+      let value = '';
+      while (pos < source.length && /[a-zA-Z0-9_]/.test(source[pos])) {
+        value += source[pos];
+        pos++;
+        column++;
+      }
+      tokens.push({ type: 'DECORATOR', value, line, column: tokenColumn });
       continue;
     }
 

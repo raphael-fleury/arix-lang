@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { transpile } from '../src/transpiler.js';
 import { parse } from '../src/parser.js';
 
@@ -30,6 +30,35 @@ function evalTranspiled(js: string, mainCall = true): unknown {
 }
 
 describe('Transpiler', () => {
+  it('transpiles decorators as function metadata', () => {
+    const ast = parse('@Test\n@Operator("**", "infixl", 7)\nfn pow(a, b) = a\nfn main() = pow._decorators.length');
+    const js = transpile(ast);
+    const result = eval(js + '\nmain()');
+    expect(result).toBe(2);
+    expect(js).toContain('"Operator"');
+  });
+
+  it('applies @Deprecated built-in decorator behavior', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const ast = parse('@Deprecated("Use divideSafe")\nfn divide(a, b) = a / b\nfn main() = divide(4, 2)');
+      const js = transpile(ast);
+      const result = eval(js + '\nmain()');
+      expect(result).toBe(2);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0][0])).toContain('Use divideSafe');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('applies @Memo built-in decorator behavior', () => {
+    const ast = parse('@Memo\nfn roll(seed) = js.Math.random()\nfn main() =\n  let first = roll(7)\n  let second = roll(7)\n  first == second');
+    const js = transpile(ast);
+    const result = normalizeListValue(eval(js + '\nmain()'));
+    expect(result).toBe(true);
+  });
+
   it('transpiles simple expression', () => {
     const ast = parse('1 + 2');
     const js = transpile(ast);

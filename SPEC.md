@@ -785,14 +785,60 @@ public async fn main() =
 
 ---
 
+## 16. Annotations (Decorators)
+
+Arix supports Java-style annotations using `@Name` syntax.
+
+### 16.1 Syntax
+```python
+@Test
+fn testDivisionBy0() =
+  divide(1, 0)
+
+@Operator("**", "infixl", 7)
+fn pow(a, b) =
+  js.Math.pow(a, b)
+```
+
+### 16.2 Arguments
+- Annotations may have zero or more positional arguments.
+- Arguments are regular expressions and are parsed using the normal expression parser.
+
+```python
+@Tag("math")
+@Retry(3, 100)
+fn compute() = 42
+```
+
+### 16.3 Built-in Runtime Decorators
+Current built-ins:
+- `@Memo`: wraps the function with argument-based memoization cache.
+- `@Deprecated(message)`: emits a runtime warning when the function is called.
+
+### 16.4 Multiple Annotations and Order
+- Multiple annotations can be stacked.
+- Application order is bottom-to-top (the annotation closest to `fn` is applied first).
+
+```python
+@A
+@B
+fn x() = 1
+# Applies as: A(B(x))
+```
+
+---
+
 ## Appendix A: Grammar Summary
 
 ```
 program       ::= stmt*
 stmt          ::= letDecl | fnDecl | typeDecl | importStmt | expr
 
+decorator     ::= '@' ident ['(' [expr (',' expr)*] ')']
+decorators    ::= decorator*
+
 letDecl       ::= 'let' ['mut'] pattern ['??' expr] '=' expr
-fnDecl        ::= ['public' | 'internal'] 'async'? 'fn' identifier params? ['->' type] ['where' constraints] '=' expr
+fnDecl        ::= decorators ['public' | 'internal'] 'async'? 'fn' identifier params? ['->' type] ['where' constraints] '=' expr
 lambdaExpr    ::= '(' params ')' '->' expr
 pattern       ::= identifier | recordPat | tuplePat | listPat | typePat
 recordPat     ::= '{' (fieldPat (',' fieldPat)*)? '}'
