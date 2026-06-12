@@ -45,11 +45,26 @@ interface TypeCheckerOptions {
   isStdlibSource?: boolean;
 }
 
+interface TypeTerm {
+  kind: 'name' | 'var';
+  name: string;
+  args: TypeTerm[];
+}
+
+interface InstanceRule {
+  typeclass: string;
+  headArgs: TypeTerm[];
+  headVarNames: Set<string>;
+  constraints: Constraint[];
+}
+
 export class TypeChecker {
   private readonly options: TypeCheckerOptions;
   private readonly diagnostics: CompilerDiagnostic[] = [];
   private readonly knownFunctions = new Map<string, number>();
+  private readonly knownFunctionDecls = new Map<string, FunctionDecl>();
   private readonly knownTypeclasses = new Map<string, TypeclassDecl>();
+  private readonly instanceRulesByTypeclass = new Map<string, InstanceRule[]>();
   private readonly knownConstructors = new Set<string>();
   private readonly adtVariants = new Map<string, Set<string>>();
   private readonly variantToType = new Map<string, string>();
@@ -69,6 +84,7 @@ export class TypeChecker {
     this.resetCollections();
 
     this.collectTopLevel(program);
+    this.collectInstanceRules(program);
     this.collectImportedNames(program);
     this.validateTypeclassInstances(program);
     this.visitProgram(program);
@@ -85,7 +101,9 @@ export class TypeChecker {
 
   private resetCollections(): void {
     this.knownFunctions.clear();
+    this.knownFunctionDecls.clear();
     this.knownTypeclasses.clear();
+    this.instanceRulesByTypeclass.clear();
     this.knownConstructors.clear();
     this.adtVariants.clear();
     this.variantToType.clear();
@@ -110,6 +128,7 @@ export class TypeChecker {
       if (node.type === 'FunctionDecl') {
         const fn = node as FunctionDecl;
         this.knownFunctions.set(fn.name, fn.params.length);
+        this.knownFunctionDecls.set(fn.name, fn);
       }
 
       if (node.type === 'TypeDecl') {
@@ -132,6 +151,34 @@ export class TypeChecker {
     this.knownFunctions.set('print', 1);
     this.knownConstructors.add('Nil');
     this.knownConstructors.add('Cons');
+  }
+
+  private collectInstanceRules(program: Program): void {
+    for (const node of program.body) {
+      if (node.type !== 'InstanceDecl') {
+        continue;
+      }
+
+      const instanceDecl = node as InstanceDecl;
+      const headArgs = instanceDecl.forTypes.map(typeNode => this.typeTermFromNode(typeNode)).filter((term): term is TypeTerm => !!term);
+      if (headArgs.length !== instanceDecl.forTypes.length) {
+        continue;
+      }
+
+      const headVarNames = new Set<string>();
+      for (const arg of headArgs) {
+        this.collectTypeVars(arg, headVarNames);
+      }
+
+      const rules = this.instanceRulesByTypeclass.get(instanceDecl.typeclass) ?? [];
+      rules.push({
+        typeclass: instanceDecl.typeclass,
+        headArgs,
+        headVarNames,
+        constraints: instanceDecl.constraints ?? [],
+      });
+      this.instanceRulesByTypeclass.set(instanceDecl.typeclass, rules);
+    }
   }
 
   private registerAdt(typeName: string, variants: string[]): void {
@@ -239,8 +286,15 @@ export class TypeChecker {
         return;
       }
       case 'TypeDecl':
-      case 'TypeclassDecl':
-      case 'InstanceDecl':
+        return;
+      case 'TypeclassDecl': {
+        this.validateTypeclassDeclConstraints(node as TypeclassDecl);
+        return;
+      }
+      case 'InstanceDecl': {
+        this.validateInstanceDeclConstraints(node as InstanceDecl);
+        return;
+      }
       case 'ImportStmt':
         return;
       default:
@@ -258,23 +312,37 @@ export class TypeChecker {
 
       if (fn.constraints) {
         for (const constraint of fn.constraints) {
-          this.visitConstraint(constraint);
+          this.visitConstraint(constraint, fn);
         }
+        this.validateFunctionConstraints(fn);
       }
 
       this.visitExpr(fn.body);
     });
   }
 
-  private visitConstraint(constraint: Constraint): void {
-    if (!this.knownTypeclasses.has(constraint.name)) {
+  private visitConstraint(constraint: Constraint, ownerNode?: Node): TypeclassDecl | undefined {
+    const typeclass = this.knownTypeclasses.get(constraint.name);
+    if (!typeclass) {
       this.addDiagnostic(
         'ARX3001',
         `Unknown typeclass '${constraint.name}' in where constraint.`,
-        undefined,
+        ownerNode,
         `Declare typeclass ${constraint.name}(...) or import the module that defines it.`,
       );
+      return undefined;
     }
+
+    if (constraint.args.length !== typeclass.typeParams.length) {
+      this.addDiagnostic(
+        'ARX3002',
+        `Constraint '${constraint.name}' expects ${typeclass.typeParams.length} type argument(s), got ${constraint.args.length}.`,
+        ownerNode,
+      );
+      return undefined;
+    }
+
+    return typeclass;
   }
 
   private visitExpr(node: Node | undefined): void {
@@ -293,6 +361,7 @@ export class TypeChecker {
           const name = (call.callee as Identifier).name;
           this.checkIdentifierUsage(call.callee as Identifier);
           this.checkArity(name, call);
+          this.validateFunctionCallConstraints(name, call);
         } else {
           this.visitExpr(call.callee);
         }
@@ -551,6 +620,8 @@ export class TypeChecker {
         continue;
       }
 
+      this.validateInstanceConstraintsAgainstTypeclass(instanceDecl, typeclass, node);
+
       const declaredMethods = new Map<string, MethodDecl>();
       for (const method of typeclass.methods) {
         declaredMethods.set(method.name, method);
@@ -601,6 +672,570 @@ export class TypeChecker {
         }
       }
     }
+  }
+
+  private validateFunctionConstraints(fn: FunctionDecl): void {
+    if (!fn.constraints || fn.constraints.length === 0) {
+      return;
+    }
+
+    const paramTypes = new Map<string, TypeTerm | undefined>();
+    const functionTypeVars = new Set<string>();
+
+    for (const param of fn.params) {
+      const typeTerm = this.typeTermFromNode(param.paramType);
+      if (typeTerm) {
+        this.collectTypeVars(typeTerm, functionTypeVars);
+      }
+      paramTypes.set(param.name, typeTerm);
+    }
+
+    for (const constraint of fn.constraints) {
+      const typeclass = this.visitConstraint(constraint, fn);
+      if (!typeclass) {
+        continue;
+      }
+
+      const resolvedArgs: TypeTerm[] = [];
+      let hasUnknownArg = false;
+
+      for (const arg of constraint.args) {
+        if (paramTypes.has(arg)) {
+          const mapped = paramTypes.get(arg);
+          if (mapped) {
+            resolvedArgs.push(mapped);
+          } else {
+            hasUnknownArg = true;
+          }
+          continue;
+        }
+
+        if (functionTypeVars.has(arg)) {
+          resolvedArgs.push({ kind: 'var', name: arg, args: [] });
+          continue;
+        }
+
+        if (this.looksLikeConcreteTypeName(arg)) {
+          resolvedArgs.push({ kind: 'name', name: arg, args: [] });
+          continue;
+        }
+
+        hasUnknownArg = true;
+        this.addDiagnostic(
+          'ARX3007',
+          `Unknown type reference '${arg}' in where constraint '${constraint.name}'.`,
+          fn,
+          'Use a function parameter name, a declared type parameter, or a concrete type name.',
+        );
+      }
+
+      if (hasUnknownArg || resolvedArgs.length !== typeclass.typeParams.length) {
+        continue;
+      }
+
+      if (this.isGroundConstraint(resolvedArgs) && !this.canSatisfyConstraint(constraint.name, resolvedArgs, [])) {
+        this.addDiagnostic(
+          'ARX3006',
+          `Unsatisfied where constraint '${constraint.name}(${resolvedArgs.map(term => this.typeTermToString(term)).join(', ')})'.`,
+          fn,
+          'Declare or import an impl that satisfies this concrete constraint.',
+        );
+      }
+    }
+  }
+
+  private validateTypeclassDeclConstraints(typeclassDecl: TypeclassDecl): void {
+    if (!typeclassDecl.constraints || typeclassDecl.constraints.length === 0) {
+      return;
+    }
+
+    const typeParams = new Set(typeclassDecl.typeParams);
+    for (const constraint of typeclassDecl.constraints) {
+      const resolved = this.visitConstraint(constraint, typeclassDecl);
+      if (!resolved) {
+        continue;
+      }
+
+      for (const arg of constraint.args) {
+        if (!typeParams.has(arg) && !this.looksLikeConcreteTypeName(arg)) {
+          this.addDiagnostic(
+            'ARX3003',
+            `Typeclass constraint '${constraint.name}' references unknown type variable '${arg}'.`,
+            typeclassDecl,
+            'Declare the type variable in the typeclass parameter list.',
+          );
+        }
+      }
+    }
+  }
+
+  private validateInstanceDeclConstraints(instanceDecl: InstanceDecl): void {
+    if (!instanceDecl.constraints || instanceDecl.constraints.length === 0) {
+      return;
+    }
+
+    const boundTypeVars = new Set<string>();
+    for (const forType of instanceDecl.forTypes) {
+      const term = this.typeTermFromNode(forType);
+      if (term) {
+        this.collectTypeVars(term, boundTypeVars);
+      }
+    }
+
+    for (const constraint of instanceDecl.constraints) {
+      const typeclass = this.visitConstraint(constraint, instanceDecl);
+      if (!typeclass) {
+        continue;
+      }
+
+      const terms: TypeTerm[] = [];
+      let hasUnknownArg = false;
+      for (const arg of constraint.args) {
+        const term = this.resolveConstraintArg(arg, boundTypeVars);
+        if (!term) {
+          hasUnknownArg = true;
+          this.addDiagnostic(
+            'ARX3004',
+            `Instance constraint '${constraint.name}' uses unbound type variable '${arg}'.`,
+            instanceDecl,
+            'Bind this variable in the impl target type or replace it with a concrete type.',
+          );
+          continue;
+        }
+        terms.push(term);
+      }
+
+      if (hasUnknownArg || terms.length !== typeclass.typeParams.length) {
+        continue;
+      }
+
+      if (this.isGroundConstraint(terms) && !this.canSatisfyConstraint(constraint.name, terms, [])) {
+        this.addDiagnostic(
+          'ARX3006',
+          `Unsatisfied where constraint '${constraint.name}(${terms.map(term => this.typeTermToString(term)).join(', ')})'.`,
+          instanceDecl,
+          'Declare or import an impl that satisfies this concrete constraint.',
+        );
+      }
+    }
+  }
+
+  private validateInstanceConstraintsAgainstTypeclass(instanceDecl: InstanceDecl, typeclass: TypeclassDecl, ownerNode: Node): void {
+    if (instanceDecl.forTypes.length !== typeclass.typeParams.length) {
+      this.addDiagnostic(
+        'ARX2006',
+        `impl ${instanceDecl.typeclass} expects ${typeclass.typeParams.length} type target(s), got ${instanceDecl.forTypes.length}.`,
+        ownerNode,
+      );
+      return;
+    }
+
+    const substitution = new Map<string, TypeTerm>();
+    for (let i = 0; i < typeclass.typeParams.length; i++) {
+      const paramName = typeclass.typeParams[i];
+      const instanceType = this.typeTermFromNode(instanceDecl.forTypes[i]);
+      if (!instanceType) {
+        return;
+      }
+      substitution.set(paramName, instanceType);
+    }
+
+    const instanceVarNames = new Set<string>();
+    for (const term of substitution.values()) {
+      this.collectTypeVars(term, instanceVarNames);
+    }
+
+    const givens: Array<{ typeclass: string; args: TypeTerm[] }> = [];
+    for (const constraint of instanceDecl.constraints ?? []) {
+      const resolved = this.constraintArgsToTerms(constraint, instanceVarNames);
+      if (!resolved || resolved.length === 0) {
+        continue;
+      }
+      givens.push({ typeclass: constraint.name, args: resolved });
+    }
+
+    for (const inheritedConstraint of typeclass.constraints ?? []) {
+      const goalArgs: TypeTerm[] = [];
+      for (const arg of inheritedConstraint.args) {
+        if (substitution.has(arg)) {
+          goalArgs.push(this.applySubstitution(substitution.get(arg)!, substitution));
+          continue;
+        }
+
+        if (this.looksLikeConcreteTypeName(arg)) {
+          goalArgs.push({ kind: 'name', name: arg, args: [] });
+          continue;
+        }
+
+        this.addDiagnostic(
+          'ARX3003',
+          `Typeclass constraint '${inheritedConstraint.name}' references unknown type variable '${arg}'.`,
+          ownerNode,
+          'Fix the typeclass where clause to use declared type parameters.',
+        );
+      }
+
+      if (goalArgs.length === 0) {
+        continue;
+      }
+
+      if (!this.canSatisfyConstraint(inheritedConstraint.name, goalArgs, givens)) {
+        this.addDiagnostic(
+          'ARX3005',
+          `impl ${instanceDecl.typeclass} for ${instanceDecl.forTypes.map(t => this.typeTermToString(this.typeTermFromNode(t) ?? { kind: 'name', name: '?', args: [] })).join(', ')} does not satisfy inherited constraint ${inheritedConstraint.name}(${goalArgs.map(arg => this.typeTermToString(arg)).join(', ')}).`,
+          ownerNode,
+          'Add a matching where constraint or declare/import the missing impl.',
+        );
+      }
+    }
+  }
+
+  private validateFunctionCallConstraints(functionName: string, call: CallExpr): void {
+    const fnDecl = this.knownFunctionDecls.get(functionName);
+    if (!fnDecl || !fnDecl.constraints || fnDecl.constraints.length === 0) {
+      return;
+    }
+
+    const paramTypeTerms = new Map<string, TypeTerm | undefined>();
+    const declaredTypeVars = new Set<string>();
+    for (const param of fnDecl.params) {
+      const term = this.typeTermFromNode(param.paramType);
+      if (term) {
+        this.collectTypeVars(term, declaredTypeVars);
+      }
+      paramTypeTerms.set(param.name, term);
+    }
+
+    const inferredByParamName = new Map<string, TypeTerm>();
+    const substitution = new Map<string, TypeTerm>();
+
+    const limit = Math.min(fnDecl.params.length, call.args.length);
+    for (let i = 0; i < limit; i++) {
+      const param = fnDecl.params[i];
+      const arg = call.args[i];
+      const argType = this.inferTypeTermFromExpr(arg);
+      if (!argType) {
+        continue;
+      }
+
+      inferredByParamName.set(param.name, argType);
+
+      const paramType = paramTypeTerms.get(param.name);
+      if (!paramType) {
+        continue;
+      }
+
+      this.unifyTerms(paramType, argType, substitution);
+    }
+
+    for (const constraint of fnDecl.constraints) {
+      const typeclass = this.visitConstraint(constraint, call);
+      if (!typeclass) {
+        continue;
+      }
+
+      const resolvedArgs: TypeTerm[] = [];
+      let hasUnknown = false;
+
+      for (const argName of constraint.args) {
+        if (inferredByParamName.has(argName)) {
+          resolvedArgs.push(inferredByParamName.get(argName)!);
+          continue;
+        }
+
+        if (declaredTypeVars.has(argName)) {
+          const substituted = substitution.get(argName);
+          if (substituted) {
+            resolvedArgs.push(this.applySubstitution(substituted, substitution));
+          } else {
+            hasUnknown = true;
+          }
+          continue;
+        }
+
+        if (this.looksLikeConcreteTypeName(argName)) {
+          resolvedArgs.push({ kind: 'name', name: argName, args: [] });
+          continue;
+        }
+
+        hasUnknown = true;
+      }
+
+      if (hasUnknown || resolvedArgs.length !== typeclass.typeParams.length) {
+        continue;
+      }
+
+      if (this.isGroundConstraint(resolvedArgs) && !this.canSatisfyConstraint(constraint.name, resolvedArgs, [])) {
+        this.addDiagnostic(
+          'ARX3006',
+          `Call to '${functionName}' requires unsatisfied constraint ${constraint.name}(${resolvedArgs.map(arg => this.typeTermToString(arg)).join(', ')}).`,
+          call,
+          'Declare or import an impl that satisfies this constraint for the argument types.',
+        );
+      }
+    }
+  }
+
+  private resolveConstraintArg(arg: string, boundTypeVars: Set<string>): TypeTerm | undefined {
+    if (boundTypeVars.has(arg)) {
+      return { kind: 'var', name: arg, args: [] };
+    }
+
+    if (this.looksLikeConcreteTypeName(arg)) {
+      return { kind: 'name', name: arg, args: [] };
+    }
+
+    return undefined;
+  }
+
+  private constraintArgsToTerms(constraint: Constraint, boundTypeVars: Set<string>): TypeTerm[] | undefined {
+    const args: TypeTerm[] = [];
+    for (const arg of constraint.args) {
+      const resolved = this.resolveConstraintArg(arg, boundTypeVars);
+      if (!resolved) {
+        return undefined;
+      }
+      args.push(resolved);
+    }
+    return args;
+  }
+
+  private canSatisfyConstraint(
+    typeclassName: string,
+    args: TypeTerm[],
+    givens: Array<{ typeclass: string; args: TypeTerm[] }>,
+    depth = 0,
+    seen = new Set<string>(),
+  ): boolean {
+    if (depth > 20) {
+      return false;
+    }
+
+    for (const given of givens) {
+      if (given.typeclass !== typeclassName || given.args.length !== args.length) {
+        continue;
+      }
+
+      const localSubst = new Map<string, TypeTerm>();
+      let matches = true;
+      for (let i = 0; i < args.length; i++) {
+        if (!this.unifyTerms(given.args[i], args[i], localSubst)) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return true;
+      }
+    }
+
+    const goalKey = `${typeclassName}(${args.map(arg => this.typeTermToString(arg)).join(',')})`;
+    if (seen.has(goalKey)) {
+      return false;
+    }
+    seen.add(goalKey);
+
+    const rules = this.instanceRulesByTypeclass.get(typeclassName) ?? [];
+    for (const rule of rules) {
+      if (rule.headArgs.length !== args.length) {
+        continue;
+      }
+
+      const substitution = new Map<string, TypeTerm>();
+      let headMatches = true;
+      for (let i = 0; i < args.length; i++) {
+        if (!this.unifyTerms(rule.headArgs[i], args[i], substitution)) {
+          headMatches = false;
+          break;
+        }
+      }
+
+      if (!headMatches) {
+        continue;
+      }
+
+      let allConstraintsSatisfied = true;
+      for (const constraint of rule.constraints) {
+        const resolvedArgs = this.constraintArgsToTerms(constraint, rule.headVarNames);
+        if (!resolvedArgs) {
+          allConstraintsSatisfied = false;
+          break;
+        }
+
+        const appliedArgs = resolvedArgs.map(arg => this.applySubstitution(arg, substitution));
+        if (!this.canSatisfyConstraint(constraint.name, appliedArgs, givens, depth + 1, seen)) {
+          allConstraintsSatisfied = false;
+          break;
+        }
+      }
+
+      if (allConstraintsSatisfied) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private typeTermFromNode(typeNode: Node | undefined): TypeTerm | undefined {
+    if (!typeNode) {
+      return undefined;
+    }
+
+    if (typeNode.type === 'Identifier') {
+      const name = (typeNode as Identifier).name;
+      if (this.looksLikeTypeVariable(name)) {
+        return { kind: 'var', name, args: [] };
+      }
+      return { kind: 'name', name, args: [] };
+    }
+
+    if (typeNode.type === 'CallExpr') {
+      const call = typeNode as CallExpr;
+      if (call.callee.type !== 'Identifier') {
+        return undefined;
+      }
+
+      const calleeName = (call.callee as Identifier).name;
+      const args: TypeTerm[] = [];
+      for (const arg of call.args) {
+        const converted = this.typeTermFromNode(arg);
+        if (!converted) {
+          return undefined;
+        }
+        args.push(converted);
+      }
+
+      return { kind: 'name', name: calleeName, args };
+    }
+
+    return undefined;
+  }
+
+  private inferTypeTermFromExpr(node: Node | undefined): TypeTerm | undefined {
+    if (!node) {
+      return undefined;
+    }
+
+    if (node.type === 'NumberLiteral') {
+      return { kind: 'name', name: 'Int', args: [] };
+    }
+    if (node.type === 'StringLiteral') {
+      return { kind: 'name', name: 'String', args: [] };
+    }
+    if (node.type === 'BooleanLiteral') {
+      return { kind: 'name', name: 'Bool', args: [] };
+    }
+
+    if (node.type === 'Identifier') {
+      const name = (node as Identifier).name;
+      const lookedUp = this.lookupType(name);
+      if (lookedUp) {
+        return { kind: 'name', name: lookedUp, args: [] };
+      }
+      return undefined;
+    }
+
+    if (node.type === 'CallExpr') {
+      const call = node as CallExpr;
+      if (call.callee.type === 'Identifier') {
+        const callee = (call.callee as Identifier).name;
+        const adtType = this.variantToType.get(callee);
+        if (adtType) {
+          return { kind: 'name', name: adtType, args: [] };
+        }
+      }
+      return undefined;
+    }
+
+    return undefined;
+  }
+
+  private looksLikeTypeVariable(name: string): boolean {
+    return /^[a-z]/.test(name);
+  }
+
+  private looksLikeConcreteTypeName(name: string): boolean {
+    return /^[A-Z]/.test(name);
+  }
+
+  private isGroundConstraint(args: TypeTerm[]): boolean {
+    return args.every(arg => this.isGroundTypeTerm(arg));
+  }
+
+  private isGroundTypeTerm(term: TypeTerm): boolean {
+    if (term.kind === 'var') {
+      return false;
+    }
+    return term.args.every(arg => this.isGroundTypeTerm(arg));
+  }
+
+  private collectTypeVars(term: TypeTerm, out: Set<string>): void {
+    if (term.kind === 'var') {
+      out.add(term.name);
+    }
+    for (const arg of term.args) {
+      this.collectTypeVars(arg, out);
+    }
+  }
+
+  private applySubstitution(term: TypeTerm, substitution: Map<string, TypeTerm>): TypeTerm {
+    if (term.kind === 'var') {
+      const replacement = substitution.get(term.name);
+      if (!replacement) {
+        return term;
+      }
+      return this.applySubstitution(replacement, substitution);
+    }
+
+    if (term.args.length === 0) {
+      return term;
+    }
+
+    return {
+      kind: term.kind,
+      name: term.name,
+      args: term.args.map(arg => this.applySubstitution(arg, substitution)),
+    };
+  }
+
+  private unifyTerms(left: TypeTerm, right: TypeTerm, substitution: Map<string, TypeTerm>): boolean {
+    const resolvedLeft = this.applySubstitution(left, substitution);
+    const resolvedRight = this.applySubstitution(right, substitution);
+
+    if (resolvedLeft.kind === 'var') {
+      substitution.set(resolvedLeft.name, resolvedRight);
+      return true;
+    }
+
+    if (resolvedRight.kind === 'var') {
+      substitution.set(resolvedRight.name, resolvedLeft);
+      return true;
+    }
+
+    if (resolvedLeft.name !== resolvedRight.name || resolvedLeft.args.length !== resolvedRight.args.length) {
+      return false;
+    }
+
+    for (let i = 0; i < resolvedLeft.args.length; i++) {
+      if (!this.unifyTerms(resolvedLeft.args[i], resolvedRight.args[i], substitution)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private typeTermToString(term: TypeTerm): string {
+    if (term.kind === 'var') {
+      return term.name;
+    }
+
+    if (term.args.length === 0) {
+      return term.name;
+    }
+
+    return `${term.name}(${term.args.map(arg => this.typeTermToString(arg)).join(', ')})`;
   }
 
   private checkIdentifierUsage(identifier: Identifier): void {

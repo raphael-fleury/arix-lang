@@ -69,4 +69,75 @@ describe('TypeChecker', () => {
     const diagnostics = runCheck('fn main(js) = js');
     expect(diagnostics.some(d => d.code === 'ARX1003' || d.code === 'ARX1004')).toBe(true);
   });
+
+  it('validates unknown type variables in typeclass where constraints', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Eq(a)',
+        '  eq(x a, y a) -> Boolean',
+        'typeclass Ord(a) where Eq(b)',
+        '  lt(x a, y a) -> Boolean',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3003')).toBe(true);
+  });
+
+  it('validates unbound type variables in impl where constraints', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Eq(a)',
+        '  eq(x a, y a) -> Boolean',
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'impl Show for List(a) where Eq(b)',
+        '  show(x) = "[]"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3004')).toBe(true);
+  });
+
+  it('validates inherited typeclass constraints for impl declarations', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Eq(a)',
+        '  eq(x a, y a) -> Boolean',
+        'typeclass Ord(a) where Eq(a)',
+        '  lt(x a, y a) -> Boolean',
+        'impl Ord for Int',
+        '  lt(x, y) = x < y',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3005')).toBe(true);
+  });
+
+  it('validates unsatisfied concrete constraints in function calls', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'fn display(x a) where Show(a) = show(x)',
+        'fn main() = display(42)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(true);
+  });
+
+  it('accepts concrete function constraints when matching impl exists', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'impl Show for Int',
+        '  show(x) = x.toString()',
+        'fn display(x a) where Show(a) = show(x)',
+        'fn main() = display(42)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(false);
+  });
 });
