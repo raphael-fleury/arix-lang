@@ -1549,6 +1549,11 @@ class Parser {
       if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
         break;
       }
+
+      const decorators = this.parseDecorators();
+      if (decorators.length > 0 && this.current().type !== 'IDENTIFIER') {
+        throw new Error('Decorators in typeclasses must be followed by a method declaration');
+      }
       
       const methodName = this.expect('IDENTIFIER').value;
       this.expect('PUNCTUATION', '(');
@@ -1581,6 +1586,7 @@ class Parser {
         name: methodName,
         params,
         returnType,
+        decorators,
         body,
       });
       
@@ -1637,6 +1643,11 @@ class Parser {
       if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
         break;
       }
+
+      const decorators = this.parseDecorators();
+      if (decorators.length > 0 && !this.isInstanceMethodStart()) {
+        throw new Error('Decorators in impl blocks must be followed by a method declaration');
+      }
       
       const methodName = this.expect('IDENTIFIER').value;
       this.expect('PUNCTUATION', '(');
@@ -1670,6 +1681,7 @@ class Parser {
         type: 'MethodImpl',
         name: methodName,
         params,
+        decorators,
         body,
       });
       
@@ -1683,6 +1695,9 @@ class Parser {
   }
 
   private isInstanceMethodStart(): boolean {
+    if (this.current().type === 'DECORATOR') {
+      return true;
+    }
     if (this.current().type !== 'IDENTIFIER') {
       return false;
     }

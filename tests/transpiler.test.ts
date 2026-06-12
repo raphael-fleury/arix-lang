@@ -34,8 +34,8 @@ describe('Transpiler', () => {
     const ast = parse('@Test\n@Operator("**", "infixl", 7)\nfn pow(a, b) = a\nfn main() = pow._decorators.length');
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
-    expect(result).toBe(2);
-    expect(js).toContain('"Operator"');
+    expect(result).toBe(1);
+    expect(js).not.toContain('"Operator"');
   });
 
   it('applies @Deprecated built-in decorator behavior', () => {
@@ -382,9 +382,47 @@ fn createStatus() = Status.Active`;
     ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
-    const result = evalTranspiled(js);
+    const result = evalTranspiled(js) as any;
     expect(result).toBeDefined();
     expect(result.show).toBeNull();
+  });
+
+  it('applies decorators on typeclass default methods', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const src = [
+        'typeclass Show(a)',
+        '  @Deprecated("Use display")',
+        '  show(x a) -> String = x',
+        'fn main() = Show.show("hello")',
+      ].join('\n');
+      const ast = parse(src);
+      const js = transpile(ast);
+      const result = evalTranspiled(js);
+      expect(result).toBe('hello');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0][0])).toContain('Use display');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('applies decorators on impl methods', () => {
+    const src = [
+      'typeclass Roll(a)',
+      '  roll(x a) -> Float',
+      'impl Roll for Int',
+      '  @Memo',
+      '  roll(x) = js.Math.random()',
+      'fn main() =',
+      '  let first = roll(7)',
+      '  let second = roll(7)',
+      '  first == second',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+    const result = evalTranspiled(js);
+    expect(result).toBe(true);
   });
 
   it('exports typeclass dispatch methods', () => {

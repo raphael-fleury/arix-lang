@@ -1479,8 +1479,9 @@ export class Transpiler {
       if (methodBodyNode) {
         // Generate a default implementation function
         const defaultFnName = `__default_${node.name}_${method.name}`;
+        const runtimeDecorators = (method.decorators || []).filter(d => d.name !== 'Operator');
         const paramList = method.params.map(p => p.name).join(', ');
-        this.writeln(`const ${defaultFnName} = function(${paramList}) {`);
+        this.writeln(`let ${defaultFnName} = function(${paramList}) {`);
         this.indent++;
         const methodBody = this.withScope(() => {
           typeclassMethodNames.forEach(methodName => this.declareName(methodName));
@@ -1493,6 +1494,10 @@ export class Transpiler {
         this.writeln(`return ${methodBody};`);
         this.indent--;
         this.writeln('};');
+        if (runtimeDecorators.length > 0) {
+          this.needsDecoratorHelpers = true;
+          this.writeln(`${defaultFnName} = __applyArixDecorators(${defaultFnName}, ${this.transpileDecorators(runtimeDecorators)});`);
+        }
         // Export default implementations so they can be used by impl in other files
         this.exports.push(defaultFnName);
       }
@@ -1558,15 +1563,23 @@ export class Transpiler {
     for (const method of node.methods) {
       // Use parameter names from the implementation if available, otherwise from typeclass
       let paramNames = ['x'];
+      let typeclassMethod: MethodDecl | undefined;
       if (method.params && method.params.length > 0) {
         paramNames = [...method.params];
       } else if (typeclass) {
-        const tcMethod = typeclass.methods.find(m => m.name === method.name);
-        if (tcMethod && tcMethod.params.length > 0) {
-          paramNames = tcMethod.params.map(p => p.name || 'arg');
+        typeclassMethod = typeclass.methods.find(m => m.name === method.name);
+        if (typeclassMethod && typeclassMethod.params.length > 0) {
+          paramNames = typeclassMethod.params.map(p => p.name || 'arg');
         }
       }
+      if (!typeclassMethod && typeclass) {
+        typeclassMethod = typeclass.methods.find(m => m.name === method.name);
+      }
       const paramList = paramNames.join(', ');
+      const runtimeDecorators = [
+        ...(typeclassMethod?.decorators || []),
+        ...(method.decorators || []),
+      ].filter(d => d.name !== 'Operator');
       
       const scopedBody = this.withScope(() => {
         paramNames.forEach(param => this.declareName(param));
@@ -1575,15 +1588,28 @@ export class Transpiler {
         }
         return this.transpileExpr(method.body);
       });
-      this.writeln(`${method.name}: function(${paramList}) {`);
-      this.indent++;
-      this.withScope(() => {
-        paramNames.forEach(param => this.declareName(param));
-        this.emitImplicitArgAliasesForNames(paramNames);
-      });
-      this.writeln(`return ${scopedBody};`);
-      this.indent--;
-      this.writeln('},');
+      if (runtimeDecorators.length > 0) {
+        this.needsDecoratorHelpers = true;
+        this.writeln(`${method.name}: __applyArixDecorators(function(${paramList}) {`);
+        this.indent++;
+        this.withScope(() => {
+          paramNames.forEach(param => this.declareName(param));
+          this.emitImplicitArgAliasesForNames(paramNames);
+        });
+        this.writeln(`return ${scopedBody};`);
+        this.indent--;
+        this.writeln(`}, ${this.transpileDecorators(runtimeDecorators)}),`);
+      } else {
+        this.writeln(`${method.name}: function(${paramList}) {`);
+        this.indent++;
+        this.withScope(() => {
+          paramNames.forEach(param => this.declareName(param));
+          this.emitImplicitArgAliasesForNames(paramNames);
+        });
+        this.writeln(`return ${scopedBody};`);
+        this.indent--;
+        this.writeln('},');
+      }
     }
     
     // Then, add default implementations from the typeclass for methods not implemented

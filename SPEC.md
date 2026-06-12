@@ -364,7 +364,17 @@ typeclass Convertible(a, b)
 - Type parameters are required: `(a)`, `(a, b)`, etc.
 - Methods specify **full signatures** with parameter names and types
 - **Default implementations** use `=` and can reference other methods in the same typeclass
+- Methods may be preceded by annotations
 - Method names are **camelCase**
+
+Annotated default methods are allowed:
+
+```python
+typeclass Formatter(a)
+  @Deprecated("Use render instead")
+  legacy(x a) -> String = x
+  render(x a) -> String
+```
 
 ### 9.2 Instance Implementation
 
@@ -388,7 +398,17 @@ impl Convertible for (Int, String)
 - `impl Typeclass for ADT` defines an instance that applies to any ADT value
 - All non-default methods must be implemented
 - Default methods are inherited automatically
+- Implemented methods may also be preceded by annotations
 - Method bodies are single expressions
+
+```python
+typeclass Roller(a)
+  roll(x a) -> Float
+
+impl Roller for Int
+  @Memo
+  roll(x) = js.Math.random()
+```
 
 ### 9.3 Type Constraints in Functions
 
@@ -800,6 +820,18 @@ fn pow(a, b) =
   js.Math.pow(a, b)
 ```
 
+Annotations can also be applied to methods inside `typeclass` and `impl` blocks:
+
+```python
+typeclass Formatter(a)
+  @Deprecated("Use render instead")
+  legacy(x a) -> String = x
+
+impl Roller for Int
+  @Memo
+  roll(x) = js.Math.random()
+```
+
 ### 16.2 Arguments
 - Annotations may have zero or more positional arguments.
 - Arguments are regular expressions and are parsed using the normal expression parser.
@@ -815,9 +847,15 @@ Current built-ins:
 - `@Memo`: wraps the function with argument-based memoization cache.
 - `@Deprecated(message)`: emits a runtime warning when the function is called.
 
-### 16.4 Multiple Annotations and Order
+### 16.4 Valid Targets
+Annotations may be attached to:
+- top-level function declarations
+- `typeclass` methods
+- `impl` methods
+
+### 16.5 Multiple Annotations and Order
 - Multiple annotations can be stacked.
-- Application order is bottom-to-top (the annotation closest to `fn` is applied first).
+- Application order is bottom-to-top (the annotation closest to the declaration is applied first).
 
 ```python
 @A
@@ -858,8 +896,9 @@ importStmt    ::= 'import' ident ['as' ident] ['(' importItems ')'] ['hiding' '(
 importItems   ::= ident (',' ident)*
 
 typeclassDecl ::= 'typeclass' ident '(' typeParams ')' [constraints] methodDecl*
-methodDecl    ::= ident params '->' type ['=' expr]
+methodDecl    ::= decorators ident params '->' type ['=' expr]
 instanceDecl  ::= 'impl' ident 'for' (type | '(' typeList ')') ['where' constraints] methodImpl*
+methodImpl    ::= decorators ident params '=' expr
 constraints   ::= 'where' constraint (',' constraint)*
 constraint    ::= ident '(' ident (',' ident)* ')'
 ```

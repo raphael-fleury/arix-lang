@@ -356,6 +356,18 @@ describe('Parser', () => {
     expect(tc.methods[1].name).toBe('notEq');
   });
 
+  it('parses decorators on typeclass methods', () => {
+    const src = [
+      'typeclass Show(a)',
+      '  @Deprecated("Use display")',
+      '  show(x a) -> String = x',
+    ].join('\n');
+    const ast = parse(src);
+    const tc = ast.body[0] as any;
+    expect(tc.methods[0].decorators).toHaveLength(1);
+    expect(tc.methods[0].decorators[0].name).toBe('Deprecated');
+  });
+
   it('parses instance declaration', () => {
     const src = [
       'impl Show for Int',
@@ -389,6 +401,18 @@ describe('Parser', () => {
     const ast = parse(src);
     const inst = ast.body[0] as any;
     expect(inst.methods.length).toBe(2);
+  });
+
+  it('parses decorators on impl methods', () => {
+    const src = [
+      'impl Show for Int',
+      '  @Memo',
+      '  show(x) = x',
+    ].join('\n');
+    const ast = parse(src);
+    const inst = ast.body[0] as any;
+    expect(inst.methods[0].decorators).toHaveLength(1);
+    expect(inst.methods[0].decorators[0].name).toBe('Memo');
   });
 
   it('parses instance declaration for ADT base type', () => {

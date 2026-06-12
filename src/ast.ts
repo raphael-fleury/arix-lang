@@ -288,6 +288,7 @@ export interface MethodDecl extends Node {
   name: string;
   params: Param[];
   returnType: Node;
+  decorators?: Decorator[];
   body?: Node; // Optional body for default implementations
 }
 
@@ -303,6 +304,7 @@ export interface MethodImpl extends Node {
   type: 'MethodImpl';
   name: string;
   params: string[]; // Parameter names
+  decorators?: Decorator[];
   body: Node; // Single expression
 }
 
