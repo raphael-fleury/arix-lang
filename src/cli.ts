@@ -7,6 +7,8 @@ import { join, dirname, relative, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tokenize } from './lexer.js';
 import { FunctionDecl, TypeDecl, TypeclassDecl, ImportStmt, InstanceDecl } from './ast.js';
+import { TypeChecker } from './typechecker.js';
+import { CompilerDiagnostic, formatDiagnostic } from './diagnostics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,6 +29,15 @@ interface GlobalInstanceInfo {
   forTypes: string[];
   methods: string[];
   module: string;
+}
+
+interface CompilationContext {
+  moduleInfoMap: Map<string, ModuleInfo>;
+  moduleNameToInfo: Map<string, ModuleInfo>;
+  fileToModuleSpecifier: Map<string, string>;
+  globalTypeclasses: Map<string, TypeclassDecl>;
+  globalInstances: GlobalInstanceInfo[];
+  entryDir: string;
 }
 
 function getTypeName(typeNode: any): string {
@@ -50,6 +61,9 @@ async function main() {
       break;
     case 'build':
       await build(args[1]);
+      break;
+    case 'check':
+      await check(args[1]);
       break;
     case 'init':
       initProject(args[1]);
@@ -77,6 +91,7 @@ Arix - Functional programming language that compiles to JavaScript
 Usage:
   arix run <file>       Compile and run a Arix file
   arix build <file>     Compile to dist/ directory
+  arix check <file>     Run semantic/type checks only
   arix init <name>      Create a new Arix project
   arix <file.arix>      Compile and run (shortcut)
 
@@ -84,6 +99,7 @@ Examples:
   arix run hello.arix
   arix hello.arix
   arix build main.arix
+  arix check main.arix
   arix init my-project
 `);
 }
@@ -154,6 +170,38 @@ async function build(file: string | undefined, outputDir = 'dist') {
     }
 
     console.log('\nRun with: node ' + join(outputDir, basename(file, '.arix') + '.js'));
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : error}`);
+    process.exit(1);
+  }
+}
+
+async function check(file: string | undefined) {
+  if (!file) {
+    console.error('Error: No file specified');
+    console.log('Usage: arix check <file.arix>');
+    process.exit(1);
+  }
+
+  if (!file.endsWith('.arix')) {
+    file += '.arix';
+  }
+
+  if (!existsSync(file)) {
+    console.error(`Error: File not found: ${file}`);
+    process.exit(1);
+  }
+
+  try {
+    console.log(`Checking ${file}...`);
+    const diagnostics = checkWithDeps(file);
+    if (diagnostics.length === 0) {
+      console.log('No semantic/type errors found.');
+      return;
+    }
+
+    printDiagnostics(diagnostics);
+    process.exit(1);
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : error}`);
     process.exit(1);
@@ -257,8 +305,7 @@ function collectModuleInfo(arixFile: string): ModuleInfo {
   return { filePath: arixFile, exports, imports, operatorDecls };
 }
 
-function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = false): Record<string, string> {
-  const compiled: Record<string, string> = {};
+function createCompilationContext(entryFile: string): CompilationContext {
   const moduleInfoMap: Map<string, ModuleInfo> = new Map();
   const moduleNameToInfo: Map<string, ModuleInfo> = new Map();
   const fileToModuleSpecifier: Map<string, string> = new Map();
@@ -302,7 +349,6 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     }
   }
 
-  // Collect all typeclasses from all files
   function collectTypeclasses(): Map<string, TypeclassDecl> {
     const allTypeclasses: Map<string, TypeclassDecl> = new Map();
 
@@ -320,8 +366,6 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
 
     return allTypeclasses;
   }
-
-  const globalTypeclasses = collectTypeclasses();
 
   function collectGlobalInstances(): GlobalInstanceInfo[] {
     const allInstances: GlobalInstanceInfo[] = [];
@@ -347,7 +391,92 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     return allInstances;
   }
 
-  const globalInstances = collectGlobalInstances();
+  return {
+    moduleInfoMap,
+    moduleNameToInfo,
+    fileToModuleSpecifier,
+    globalTypeclasses: collectTypeclasses(),
+    globalInstances: collectGlobalInstances(),
+    entryDir,
+  };
+}
+
+function collectGlobalAdtVariants(moduleInfoMap: Map<string, ModuleInfo>): Map<string, string[]> {
+  const variantsByType = new Map<string, string[]>();
+
+  for (const [filePath] of moduleInfoMap) {
+    const source = readFileSync(filePath, 'utf-8');
+    const ast = parse(source);
+    for (const node of ast.body) {
+      if (node.type === 'TypeDecl') {
+        const decl = node as TypeDecl;
+        variantsByType.set(decl.name, decl.variants.map(v => v.name));
+      }
+    }
+  }
+
+  return variantsByType;
+}
+
+function checkWithDeps(entryFile: string): CompilerDiagnostic[] {
+  const context = createCompilationContext(entryFile);
+  const diagnostics: CompilerDiagnostic[] = [];
+  const adtVariants = collectGlobalAdtVariants(context.moduleInfoMap);
+
+  for (const [filePath, fileInfo] of context.moduleInfoMap) {
+    const source = readFileSync(filePath, 'utf-8');
+
+    const externalOperators = new Map<string, OperatorInfo>();
+    for (const importedModule of fileInfo.imports) {
+      const depFile = resolveModule(importedModule, dirname(filePath));
+      if (!depFile) {
+        continue;
+      }
+
+      const depInfo = context.moduleInfoMap.get(depFile);
+      if (!depInfo) {
+        continue;
+      }
+
+      for (const op of depInfo.operatorDecls) {
+        const associativity: 'left' | 'right' | 'none' =
+          op.assoc.toLowerCase() === 'infixr' ? 'right' :
+          op.assoc.toLowerCase() === 'infixl' ? 'left' :
+          'none';
+        externalOperators.set(op.symbol, { precedence: op.prec, associativity, kind: op.kind, fnName: op.fnName });
+      }
+    }
+
+    const ast = parse(source, externalOperators);
+    const checker = new TypeChecker({
+      moduleInfoMap: context.moduleNameToInfo,
+      globalTypeclasses: context.globalTypeclasses,
+      globalAdtVariants: adtVariants,
+      stdlibModules: STDLIB_MODULES,
+      isStdlibSource: filePath.startsWith(STD_LIB_DIR),
+    });
+
+    diagnostics.push(...checker.check(ast, filePath));
+  }
+
+  return diagnostics;
+}
+
+function printDiagnostics(diagnostics: CompilerDiagnostic[]): void {
+  for (const diagnostic of diagnostics) {
+    const printer = diagnostic.severity === 'error' ? console.error : console.log;
+    printer(formatDiagnostic(diagnostic));
+  }
+}
+
+function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = false): Record<string, string> {
+  const compiled: Record<string, string> = {};
+  const context = createCompilationContext(entryFile);
+  const typeDiagnostics = checkWithDeps(entryFile);
+  if (typeDiagnostics.length > 0) {
+    printDiagnostics(typeDiagnostics);
+    throw new Error('Type checking failed.');
+  }
 
   function compileFile(arixFile: string, isMain = false): void {
     if (compiled[arixFile]) return;
@@ -358,7 +487,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     if (isStdLib) {
       outputFile = join(outputDir, basename(arixFile, '.arix') + '.js');
     } else {
-      const relFromEntry = relative(entryDir, arixFile).replaceAll('\\', '/');
+      const relFromEntry = relative(context.entryDir, arixFile).replaceAll('\\', '/');
       const dir = join(outputDir, dirname(relFromEntry));
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true });
@@ -378,12 +507,12 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     // knows their precedence/associativity when parsing this file.
     const externalOperators = new Map<string, OperatorInfo>();
     const externalOperatorFns = new Map<string, string>();
-    const fileInfo = moduleInfoMap.get(arixFile);
+    const fileInfo = context.moduleInfoMap.get(arixFile);
     if (fileInfo) {
       for (const importedModule of fileInfo.imports) {
         const depFile = resolveModule(importedModule, dirname(arixFile));
         if (depFile) {
-          const depInfo = moduleInfoMap.get(depFile);
+          const depInfo = context.moduleInfoMap.get(depFile);
           if (depInfo) {
             for (const op of depInfo.operatorDecls) {
               const associativity: 'left' | 'right' | 'none' =
@@ -400,9 +529,9 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
 
     const ast = parse(source, externalOperators);
     const transpiler = new Transpiler();
-    transpiler.setModuleInfo(moduleNameToInfo);
-    transpiler.setGlobalTypeclasses(globalTypeclasses);
-    transpiler.setGlobalInstances(globalInstances);
+    transpiler.setModuleInfo(context.moduleNameToInfo);
+    transpiler.setGlobalTypeclasses(context.globalTypeclasses);
+    transpiler.setGlobalInstances(context.globalInstances);
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
     if (externalOperatorFns.size > 0) transpiler.setOperatorFns(externalOperatorFns);
@@ -411,7 +540,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     compiled[outputFile] = jsCode;
   }
 
-  for (const [filePath] of moduleInfoMap) {
+  for (const [filePath] of context.moduleInfoMap) {
     compileFile(filePath, filePath === entryFile);
   }
 

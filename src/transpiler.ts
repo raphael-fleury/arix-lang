@@ -28,6 +28,7 @@ import type {
   TypeDecl,
   TypeclassDecl,
   InstanceDecl,
+  MethodDecl,
   Param,
   Pattern,
   ForExpr,
