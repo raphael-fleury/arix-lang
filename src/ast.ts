@@ -103,6 +103,7 @@ export interface UnaryExpr extends Node {
   type: 'UnaryExpr';
   operator: string;
   operand: Node;
+  position?: 'prefix' | 'suffix';
 }
 
 export interface CallExpr extends Node {

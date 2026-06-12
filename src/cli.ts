@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { parse } from './parser.js';
+import { parse, extractOperators, OperatorInfo } from './parser.js';
 import { Transpiler } from './transpiler.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join, dirname, relative, basename } from 'node:path';
@@ -19,6 +19,7 @@ interface ModuleInfo {
   filePath: string;
   exports: string[];
   imports: string[];
+  operatorDecls: { symbol: string; kind: 'infix' | 'prefix' | 'suffix'; assoc: string; prec: number; fnName: string }[];
 }
 
 interface GlobalInstanceInfo {
@@ -202,12 +203,29 @@ function collectModuleInfo(arixFile: string): ModuleInfo {
 
   const exports: string[] = [];
   const imports: string[] = [];
+  const operatorDecls: { symbol: string; kind: 'infix' | 'prefix' | 'suffix'; assoc: string; prec: number; fnName: string }[] = [];
 
   for (const node of ast.body) {
     if (node.type === 'FunctionDecl') {
       const fn = node as FunctionDecl;
       if (fn.visibility === 'public') {
         exports.push(fn.name);
+      }
+      const opDec = fn.decorators?.find(d => d.name === 'Operator');
+      if (opDec && opDec.args.length >= 3) {
+        const symNode = opDec.args[0];
+        const assocNode = opDec.args[1];
+        const precNode = opDec.args[2];
+        if (symNode.type === 'StringLiteral' && assocNode.type === 'StringLiteral' && precNode.type === 'NumberLiteral') {
+          const assocValue = (assocNode as any).value.toLowerCase();
+          operatorDecls.push({
+            symbol: (symNode as any).value,
+            kind: assocValue.startsWith('prefix') ? 'prefix' : assocValue.startsWith('suffix') ? 'suffix' : 'infix',
+            assoc: (assocNode as any).value,
+            prec: (precNode as any).value,
+            fnName: fn.name,
+          });
+        }
       }
     }
     if (node.type === 'TypeDecl') {
@@ -236,7 +254,7 @@ function collectModuleInfo(arixFile: string): ModuleInfo {
     }
   }
 
-  return { filePath: arixFile, exports, imports };
+  return { filePath: arixFile, exports, imports, operatorDecls };
 }
 
 function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = false): Record<string, string> {
@@ -356,13 +374,38 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     const source = readFileSync(arixFile, 'utf-8');
     if (process.env.DEBUG) console.log('Tokens:', tokenize(source));
 
-    const ast = parse(source);
+    // Collect operator declarations from all imported modules so the parser
+    // knows their precedence/associativity when parsing this file.
+    const externalOperators = new Map<string, OperatorInfo>();
+    const externalOperatorFns = new Map<string, string>();
+    const fileInfo = moduleInfoMap.get(arixFile);
+    if (fileInfo) {
+      for (const importedModule of fileInfo.imports) {
+        const depFile = resolveModule(importedModule, dirname(arixFile));
+        if (depFile) {
+          const depInfo = moduleInfoMap.get(depFile);
+          if (depInfo) {
+            for (const op of depInfo.operatorDecls) {
+              const associativity: 'left' | 'right' | 'none' =
+                op.assoc.toLowerCase() === 'infixr' ? 'right' :
+                op.assoc.toLowerCase() === 'infixl' ? 'left' :
+                'none';
+              externalOperators.set(op.symbol, { precedence: op.prec, associativity, kind: op.kind, fnName: op.fnName });
+              externalOperatorFns.set(op.symbol, op.fnName);
+            }
+          }
+        }
+      }
+    }
+
+    const ast = parse(source, externalOperators);
     const transpiler = new Transpiler();
     transpiler.setModuleInfo(moduleNameToInfo);
     transpiler.setGlobalTypeclasses(globalTypeclasses);
     transpiler.setGlobalInstances(globalInstances);
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
+    if (externalOperatorFns.size > 0) transpiler.setOperatorFns(externalOperatorFns);
 
     const jsCode = transpiler.transpile(ast, arixFile);
     compiled[outputFile] = jsCode;

@@ -80,6 +80,7 @@ export class Transpiler {
   private needsBoolHelpers = false;
   private needsDecoratorHelpers = false;
   private scopeStack: Set<string>[] = [];
+  private operatorFns: Map<string, string> = new Map(); // symbol → fn name
 
   setOutputDir(dir: string): void {
     this.outputDir = dir;
@@ -87,6 +88,12 @@ export class Transpiler {
 
   setAutoRunMain(auto: boolean): void {
     this.autoRunMain = auto;
+  }
+
+  setOperatorFns(ops: Map<string, string>): void {
+    for (const [sym, fn] of ops) {
+      this.operatorFns.set(sym, fn);
+    }
   }
 
   transpile(ast: Program, filePath: string = ''): string {
@@ -106,6 +113,7 @@ export class Transpiler {
     this.needsRuntime = false;
     this.needsBoolHelpers = false;
     this.needsDecoratorHelpers = false;
+    this.operatorFns = new Map();
     this.scopeStack = [new Set()];
 
     const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
@@ -356,7 +364,19 @@ export class Transpiler {
   private transpileFunctionDecl(node: FunctionDecl): void {
     this.assertNotReservedIdentifier(node.name);
     this.functions.set(node.name, node.params.length);
-    
+
+    // Register @Operator decorator at compile time (symbol → fnName)
+    const operatorDec = node.decorators?.find(d => d.name === 'Operator');
+    if (operatorDec && operatorDec.args.length >= 1) {
+      const symNode = operatorDec.args[0];
+      if (symNode.type === 'StringLiteral') {
+        this.operatorFns.set((symNode as any).value as string, node.name);
+      }
+    }
+
+    // Filter out @Operator before passing to __applyArixDecorators (it's compile-time only)
+    const runtimeDecorators = (node.decorators || []).filter(d => d.name !== 'Operator');
+
     const asyncPrefix = node.isAsync ? 'async ' : '';
     const visibility = node.visibility === 'public' ? 'export ' : '';
     
@@ -371,7 +391,7 @@ export class Transpiler {
         return this.transpileExpr(fnExpr.body);
       });
       const params = fnExpr.params.map(p => p.name).join(', ');
-      if ((node.decorators?.length || 0) > 0) {
+      if (runtimeDecorators.length > 0) {
         this.writeln(`${visibility}function ${node.name}(${params}) {`);
         this.indent++;
         this.writeln(`return ${body};`);
@@ -437,9 +457,9 @@ export class Transpiler {
       this.writeln('}');
     }
 
-    if ((node.decorators?.length || 0) > 0) {
+    if (runtimeDecorators.length > 0) {
       this.needsDecoratorHelpers = true;
-      this.writeln(`${node.name} = __applyArixDecorators(${node.name}, ${this.transpileDecorators(node.decorators || [])});`);
+      this.writeln(`${node.name} = __applyArixDecorators(${node.name}, ${this.transpileDecorators(runtimeDecorators)});`);
     }
 
     this.writeln();
@@ -809,12 +829,21 @@ export class Transpiler {
         if (bin.operator === '++') {
           return `(${left} + ${right})`;
         }
+        // Custom operator declared via @Operator — dispatch to its function
+        const customFn = this.operatorFns.get(bin.operator);
+        if (customFn) {
+          return `${customFn}(${left}, ${right})`;
+        }
         return `(${left} ${bin.operator} ${right})`;
       }
       
       case 'UnaryExpr': {
         const unary = node as UnaryExpr;
         const operand = this.transpileExpr(unary.operand);
+        const customFn = this.operatorFns.get(unary.operator);
+        if (customFn) {
+          return `${customFn}(${operand})`;
+        }
         if (unary.operator === '!') {
           this.needsBoolHelpers = true;
           return `__boolNot(${operand})`;

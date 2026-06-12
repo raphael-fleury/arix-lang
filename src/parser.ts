@@ -1,4 +1,4 @@
-import { tokenize, Token, TokenType } from './lexer.js';
+import { tokenize, extractCustomOperatorSymbols, Token, TokenType } from './lexer.js';
 import type {
   Node,
   Program,
@@ -46,15 +46,100 @@ import type {
   Guard,
 } from './ast.js';
 
+export interface OperatorInfo {
+  precedence: number;
+  associativity: 'left' | 'right' | 'none';
+  kind: 'infix' | 'prefix' | 'suffix';
+  fnName?: string;
+}
+
 class Parser {
   private tokens: Token[] = [];
   private pos = 0;
+  private customOperators: Map<string, OperatorInfo> = new Map();
+
+  getCustomOperators(): Map<string, OperatorInfo> {
+    return this.customOperators;
+  }
+
+  setCustomOperators(ops: Map<string, OperatorInfo>): void {
+    for (const [sym, info] of ops) {
+      this.customOperators.set(sym, info);
+    }
+  }
 
   parse(source: string): Program {
-    this.tokens = tokenize(source);
+    this.tokens = tokenize(source, extractCustomOperatorSymbols(source));
     this.pos = 0;
+    this.preScanOperators();
     const body = this.parseBody();
     return { type: 'Program', body };
+  }
+
+  /** Scans token stream for @Operator("sym", assoc, prec) before fn declarations
+   *  and populates customOperators so the expression parser knows their precedence. */
+  private preScanOperators(): void {
+    for (let i = 0; i < this.tokens.length; i++) {
+      const t = this.tokens[i];
+      if (t.type !== 'DECORATOR' || t.value !== 'Operator') continue;
+
+      // Expect: ( STRING , STRING , NUMBER )
+      let j = i + 1;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      if (this.tokens[j]?.value !== '(') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+
+      const symToken = this.tokens[j];
+      if (symToken?.type !== 'STRING') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      if (this.tokens[j]?.value !== ',') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+
+      const assocToken = this.tokens[j];
+      if (assocToken?.type !== 'STRING') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      if (this.tokens[j]?.value !== ',') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+
+      const precToken = this.tokens[j];
+      if (precToken?.type !== 'NUMBER') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      if (this.tokens[j]?.value !== ')') continue;
+
+      // Skip ahead to find fn name
+      j++;
+      while (j < this.tokens.length && (this.tokens[j].type === 'NEWLINE' || this.tokens[j].type === 'INDENT' || this.tokens[j].type === 'DEDENT')) j++;
+      const visOrFn = this.tokens[j];
+      if (visOrFn?.type === 'KEYWORD' && (visOrFn.value === 'public' || visOrFn.value === 'internal' || visOrFn.value === 'private')) j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      if (this.tokens[j]?.type === 'KEYWORD' && this.tokens[j].value === 'async') j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      if (this.tokens[j]?.type !== 'KEYWORD' || this.tokens[j].value !== 'fn') continue;
+      j++;
+      while (j < this.tokens.length && this.tokens[j].type === 'NEWLINE') j++;
+      const fnNameToken = this.tokens[j];
+      if (fnNameToken?.type !== 'IDENTIFIER') continue;
+
+      const sym = symToken.value;
+      const assocRaw = assocToken.value.toLowerCase();
+      const prec = Number(precToken.value);
+      const kind: 'infix' | 'prefix' | 'suffix' =
+        assocRaw.startsWith('prefix') ? 'prefix' :
+        assocRaw.startsWith('suffix') ? 'suffix' :
+        'infix';
+      const associativity: 'left' | 'right' | 'none' =
+        assocRaw === 'infixr' ? 'right' :
+        assocRaw === 'infixl' ? 'left' :
+        'none';
+
+      this.customOperators.set(sym, { precedence: prec, associativity, kind, fnName: fnNameToken.value });
+    }
   }
 
   private current(): Token {
@@ -682,21 +767,38 @@ class Parser {
   }
 
   private parseUnary(): Node {
+    if (this.current().type === 'OPERATOR') {
+      const customOperator = this.customOperators.get(this.current().value);
+      if (customOperator?.kind === 'prefix') {
+        const operator = this.advance().value;
+        const operand = this.parseUnary();
+        return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;
+      }
+    }
     if (this.current().value === '!' || this.current().value === '-') {
       const operator = this.advance().value;
       const operand = this.parseUnary();
-      return { type: 'UnaryExpr', operator, operand } as UnaryExpr;
+      return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;
     }
     if (this.current().value === 'await') {
       this.advance();
       const expression = this.parseUnary();
       return { type: 'AwaitExpr', expression } as AwaitExpr;
     }
-    // Check for section operators: ++, -- (operators that can't be unary)
-    if (this.current().type === 'OPERATOR' && (this.current().value === '++' || this.current().value === '--')) {
-      return this.parseSectionOperator();
-    }
     return this.parseBinary();
+  }
+
+  private parsePostfix(): Node {
+    let expr = this.parseCall();
+
+    while (this.current().type === 'OPERATOR') {
+      const info = this.customOperators.get(this.current().value);
+      if (!info || info.kind !== 'suffix') break;
+      const operator = this.advance().value;
+      expr = { type: 'UnaryExpr', operator, operand: expr, position: 'suffix' } as UnaryExpr;
+    }
+
+    return expr;
   }
 
   private parseBinary(): Node {
@@ -704,7 +806,7 @@ class Parser {
   }
 
   private parseBinaryWithPrecedence(minPrecedence: number): Node {
-    let left = this.parseCall();
+    let left = this.parsePostfix();
     this.skipNewlines();
 
     const precedences: Record<string, number> = {
@@ -713,7 +815,16 @@ class Parser {
       '||': 1, '&&': 2, '==': 3, '!=': 3, '<': 4, '>': 4, '<=': 4, '>=': 4,
       '+': 5, '-': 5, '*': 6, '/': 6, '%': 6, '++': 7, '.': 8,
     };
+    // Merge custom operators declared via @Operator
+    for (const [sym, info] of this.customOperators) {
+      if (info.kind === 'infix') {
+        precedences[sym] = info.precedence;
+      }
+    }
     const rightAssociative = new Set(['$', '.']);
+    for (const [sym, info] of this.customOperators) {
+      if (info.kind === 'infix' && info.associativity === 'right') rightAssociative.add(sym);
+    }
 
     while (true) {
       this.skipNewlines();
@@ -1627,7 +1738,15 @@ class Parser {
   }
 }
 
-export function parse(source: string): Program {
+export function parse(source: string, externalOperators?: Map<string, OperatorInfo>): Program {
   const parser = new Parser();
+  if (externalOperators) parser.setCustomOperators(externalOperators);
   return parser.parse(source);
+}
+
+/** Extract all @Operator declarations from source without needing the full AST. */
+export function extractOperators(source: string): Map<string, OperatorInfo> {
+  const parser = new Parser();
+  parser.parse(source);
+  return parser.getCustomOperators();
 }

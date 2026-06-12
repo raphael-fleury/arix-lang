@@ -83,14 +83,28 @@ function processEscapeSequences(str: string): string {
   return result;
 }
 
-export function tokenize(source: string): Token[] {
+/** Extract custom operator symbols declared via @Operator("symbol", ...) in raw source. */
+export function extractCustomOperatorSymbols(source: string): string[] {
+  const symbols: string[] = [];
+  const re = /@Operator\s*\(\s*"([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    symbols.push(m[1]);
+  }
+  return symbols;
+}
+
+export function tokenize(source: string, extraOperators: string[] = []): Token[] {
   const tokens: Token[] = [];
   let pos = 0;
   let line = 1;
   let column = 1;
 
   const keywords = new Set(KEYWORDS);
-  const operators = new Set<string>(OPERATORS);
+  const allOperators = extraOperators.length > 0
+    ? [...OPERATORS, ...extraOperators].sort((a, b) => b.length - a.length)
+    : OPERATORS_BY_LENGTH;
+  const operators = new Set<string>([...OPERATORS, ...extraOperators]);
   const punctuation = new Set<string>(PUNCTUATION);
   
   // Indentation tracking
@@ -352,7 +366,7 @@ export function tokenize(source: string): Token[] {
 
     // Operators: try longest matches first (greedy)
     let operatorFound = false;
-    for (const op of OPERATORS_BY_LENGTH) {
+    for (const op of allOperators) {
       if (source.slice(pos, pos + op.length) === op) {
         tokens.push({ type: 'OPERATOR', value: op, line, column });
         pos += op.length;
