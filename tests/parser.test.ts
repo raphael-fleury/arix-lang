@@ -116,6 +116,19 @@ describe('Parser', () => {
     expect(typeDecl.recordFields[1].default?.value).toBe(18);
   });
 
+  it('parses type declaration with where constraints', () => {
+    const ast = parse('type List(a) = Nil | Cons(head: a, tail: List(a)) where Show(a)');
+    const typeDecl = ast.body[0] as any;
+
+    expect(typeDecl.type).toBe('TypeDecl');
+    expect(typeDecl.name).toBe('List');
+    expect(typeDecl.typeParams).toEqual(['a']);
+    expect(typeDecl.constraints).toBeDefined();
+    expect(typeDecl.constraints).toHaveLength(1);
+    expect(typeDecl.constraints[0].name).toBe('Show');
+    expect(typeDecl.constraints[0].args).toEqual(['a']);
+  });
+
   it('parses block expression (not record) when body starts with let', () => {
     const ast = parse('fn f() = { let x = 1 x }');
     const fn = ast.body[0] as any;

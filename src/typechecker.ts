@@ -63,6 +63,7 @@ export class TypeChecker {
   private readonly diagnostics: CompilerDiagnostic[] = [];
   private readonly knownFunctions = new Map<string, number>();
   private readonly knownFunctionDecls = new Map<string, FunctionDecl>();
+  private readonly knownTypeDecls = new Map<string, TypeDecl>();
   private readonly knownTypeclasses = new Map<string, TypeclassDecl>();
   private readonly instanceRulesByTypeclass = new Map<string, InstanceRule[]>();
   private readonly knownConstructors = new Set<string>();
@@ -102,6 +103,7 @@ export class TypeChecker {
   private resetCollections(): void {
     this.knownFunctions.clear();
     this.knownFunctionDecls.clear();
+    this.knownTypeDecls.clear();
     this.knownTypeclasses.clear();
     this.instanceRulesByTypeclass.clear();
     this.knownConstructors.clear();
@@ -133,6 +135,7 @@ export class TypeChecker {
 
       if (node.type === 'TypeDecl') {
         const typeDecl = node as TypeDecl;
+        this.knownTypeDecls.set(typeDecl.name, typeDecl);
         this.registerAdt(typeDecl.name, typeDecl.variants.map(v => v.name));
         for (const variant of typeDecl.variants) {
           this.knownFunctions.set(variant.name, variant.fields.length);
@@ -286,6 +289,7 @@ export class TypeChecker {
         return;
       }
       case 'TypeDecl':
+        this.validateTypeDeclConstraints(node as TypeDecl);
         return;
       case 'TypeclassDecl': {
         this.validateTypeclassDeclConstraints(node as TypeclassDecl);
@@ -362,6 +366,7 @@ export class TypeChecker {
           this.checkIdentifierUsage(call.callee as Identifier);
           this.checkArity(name, call);
           this.validateFunctionCallConstraints(name, call);
+          this.validateTypeConstructorCallConstraints(name, call);
         } else {
           this.visitExpr(call.callee);
         }
@@ -744,6 +749,31 @@ export class TypeChecker {
     }
   }
 
+  private validateTypeDeclConstraints(typeDecl: TypeDecl): void {
+    if (!typeDecl.constraints || typeDecl.constraints.length === 0) {
+      return;
+    }
+
+    const typeParams = new Set(typeDecl.typeParams ?? []);
+    for (const constraint of typeDecl.constraints) {
+      const resolved = this.visitConstraint(constraint, typeDecl);
+      if (!resolved) {
+        continue;
+      }
+
+      for (const arg of constraint.args) {
+        if (!typeParams.has(arg) && !this.looksLikeConcreteTypeName(arg)) {
+          this.addDiagnostic(
+            'ARX3003',
+            `Type constraint '${constraint.name}' references unknown type variable '${arg}'.`,
+            typeDecl,
+            'Declare the type variable in the type parameter list.',
+          );
+        }
+      }
+    }
+  }
+
   private validateTypeclassDeclConstraints(typeclassDecl: TypeclassDecl): void {
     if (!typeclassDecl.constraints || typeclassDecl.constraints.length === 0) {
       return;
@@ -971,6 +1001,72 @@ export class TypeChecker {
           `Call to '${functionName}' requires unsatisfied constraint ${constraint.name}(${resolvedArgs.map(arg => this.typeTermToString(arg)).join(', ')}).`,
           call,
           'Declare or import an impl that satisfies this constraint for the argument types.',
+        );
+      }
+    }
+  }
+
+  private validateTypeConstructorCallConstraints(constructorName: string, call: CallExpr): void {
+    const ownerTypeName = this.variantToType.get(constructorName);
+    if (!ownerTypeName) {
+      return;
+    }
+
+    const typeDecl = this.knownTypeDecls.get(ownerTypeName);
+    if (!typeDecl || !typeDecl.constraints || typeDecl.constraints.length === 0) {
+      return;
+    }
+
+    const variantDecl = typeDecl.variants.find(variant => variant.name === constructorName);
+    if (!variantDecl || variantDecl.fields.length === 0) {
+      return;
+    }
+
+    const substitution = new Map<string, TypeTerm>();
+    const pairCount = Math.min(variantDecl.fields.length, call.args.length);
+    for (let i = 0; i < pairCount; i++) {
+      const fieldType = this.typeTermFromNode(variantDecl.fields[i].fieldType);
+      const argType = this.inferTypeTermFromExpr(call.args[i]);
+      if (!fieldType || !argType) {
+        continue;
+      }
+      this.unifyTerms(fieldType, argType, substitution);
+    }
+
+    for (const constraint of typeDecl.constraints) {
+      const typeclass = this.visitConstraint(constraint, call);
+      if (!typeclass) {
+        continue;
+      }
+
+      const resolvedArgs: TypeTerm[] = [];
+      let hasUnknown = false;
+
+      for (const argName of constraint.args) {
+        const substituted = substitution.get(argName);
+        if (substituted) {
+          resolvedArgs.push(this.applySubstitution(substituted, substitution));
+          continue;
+        }
+
+        if (this.looksLikeConcreteTypeName(argName)) {
+          resolvedArgs.push({ kind: 'name', name: argName, args: [] });
+          continue;
+        }
+
+        hasUnknown = true;
+      }
+
+      if (hasUnknown || resolvedArgs.length !== typeclass.typeParams.length) {
+        continue;
+      }
+
+      if (this.isGroundConstraint(resolvedArgs) && !this.canSatisfyConstraint(constraint.name, resolvedArgs, [])) {
+        this.addDiagnostic(
+          'ARX3006',
+          `Constructor '${constructorName}' requires unsatisfied constraint ${constraint.name}(${resolvedArgs.map(arg => this.typeTermToString(arg)).join(', ')}).`,
+          call,
+          'Declare or import an impl that satisfies this constraint for the constructor argument types.',
         );
       }
     }

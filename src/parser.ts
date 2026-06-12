@@ -586,6 +586,7 @@ class Parser {
     this.advance(); // consume 'type'
     const name = this.expect('IDENTIFIER').value;
     const typeParams: string[] = [];
+    let constraints: Constraint[] | undefined;
 
     if (this.current().value === '(') {
       this.advance();
@@ -620,8 +621,13 @@ class Parser {
           if (this.current().value === ',') this.advance();
         }
         this.expect('PUNCTUATION', '}');
+
+        if (this.current().value === 'where') {
+          this.advance();
+          constraints = this.parseConstraints();
+        }
       } else {
-        while (this.current().type !== 'NEWLINE' && this.current().type !== 'EOF') {
+        while (this.current().type !== 'NEWLINE' && this.current().type !== 'EOF' && this.current().value !== 'where') {
           const variantName = this.expect('IDENTIFIER').value;
           const fields: { name: string; fieldType: Node }[] = [];
 
@@ -658,12 +664,22 @@ class Parser {
           if (this.current().value === '|') this.advance();
           else break;
         }
+
+        if (this.current().value === 'where') {
+          this.advance();
+          constraints = this.parseConstraints();
+        }
       }
 
-      return { type: 'TypeDecl', name, typeParams, variants, recordFields: isRecord ? recordFields : undefined };
+      return { type: 'TypeDecl', name, typeParams, constraints, variants, recordFields: isRecord ? recordFields : undefined };
     }
 
-    return { type: 'TypeDecl', name, typeParams, variants };
+    if (this.current().value === 'where') {
+      this.advance();
+      constraints = this.parseConstraints();
+    }
+
+    return { type: 'TypeDecl', name, typeParams, constraints, variants };
   }
 
   private parseImportStmt(): ImportStmt {

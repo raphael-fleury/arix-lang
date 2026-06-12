@@ -140,4 +140,57 @@ describe('TypeChecker', () => {
 
     expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(false);
   });
+
+  it('validates unknown type variables in type declaration where constraints', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'type Box(a) = Box(value: a) where Show(b)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3003')).toBe(true);
+  });
+
+  it('accepts valid type declaration where constraints', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'type Box(a) = Box(value: a) where Show(a)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3003')).toBe(false);
+    expect(diagnostics.some(d => d.code === 'ARX3001')).toBe(false);
+  });
+
+  it('rejects ADT constructor call when type where constraint is not satisfied', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'type Box(a) = Box(value: a) where Show(a)',
+        'let foo = Box(42)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(true);
+  });
+
+  it('accepts ADT constructor call when type where constraint is satisfied', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'impl Show for Int',
+        '  show(x) = x.toString()',
+        'type Box(a) = Box(value: a) where Show(a)',
+        'let foo = Box(42)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(false);
+  });
 });

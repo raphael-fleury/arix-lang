@@ -271,6 +271,7 @@ export interface TypeDecl extends Node {
   type: 'TypeDecl';
   name: string;
   typeParams?: string[];
+  constraints?: Constraint[];
   variants: TypeVariant[];
   recordFields?: { name: string; fieldType: Node; default?: Node }[];
 }
