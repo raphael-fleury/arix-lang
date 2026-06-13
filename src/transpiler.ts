@@ -1733,8 +1733,15 @@ export class Transpiler {
         this.writeln(`const ${methodName} = (${paramList}) => {`);
         this.indent++;
         
-        // Try each instance in order with type checking
-        for (const instanceVarName of instanceVarNames) {
+        // Try each instance in order with type checking — generic ADT last
+        const sortedInstanceVarNames = [...instanceVarNames].sort((a, b) => {
+          const aType = (this.instanceTypes.get(a) || [])[0];
+          const bType = (this.instanceTypes.get(b) || [])[0];
+          if (aType === 'ADT' && bType !== 'ADT') return 1;
+          if (bType === 'ADT' && aType !== 'ADT') return -1;
+          return 0;
+        });
+        for (const instanceVarName of sortedInstanceVarNames) {
           const typeNames = this.instanceTypes.get(instanceVarName) || [];
           const typeCheck = this.generateTypeCheck(typeNames[0], paramNames[0] || 'x');
           
@@ -1749,11 +1756,15 @@ export class Transpiler {
           this.writeln(`}`);
         }
 
-        // Try imported module instances (cross-module dispatch).
+        // Try imported module instances (cross-module dispatch) — generic ADT last.
         const externalInstances = this.globalInstances.filter(inst =>
           inst.typeclass === tcName &&
           inst.methods.includes(methodName)
-        );
+        ).sort((a, b) => {
+          if (a.forTypes[0] === 'ADT' && b.forTypes[0] !== 'ADT') return 1;
+          if (b.forTypes[0] === 'ADT' && a.forTypes[0] !== 'ADT') return -1;
+          return 0;
+        });
         for (const instance of externalInstances) {
           const moduleNamespace = this.moduleNamespaces.get(instance.module) || this.moduleNamespaces.get(instance.module.toLowerCase());
           if (!moduleNamespace) {
