@@ -791,7 +791,7 @@ class Parser {
         return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;
       }
     }
-    if (this.current().value === '!' || this.current().value === '-') {
+    if (this.current().type === 'OPERATOR' && (this.current().value === '!' || this.current().value === '-')) {
       const operator = this.advance().value;
       const operand = this.parseUnary();
       return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;

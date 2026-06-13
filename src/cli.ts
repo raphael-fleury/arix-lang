@@ -16,8 +16,8 @@ const RUNTIME_SOURCE = join(__dirname, '..', 'runtime', 'arix-runtime.js');
 
 const STD_LIB_DIR = join(__dirname, '..', 'stdlib');
 const STD_LIB_TYPECLASSES_DIR = join(STD_LIB_DIR, 'typeclasses');
-const STDLIB_MODULES = ['bool', 'eq', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
-const STDLIB_TYPECLASS_MODULES = new Set(['eq', 'show', 'functor', 'applicative', 'monad', 'monoid']);
+const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+const STDLIB_TYPECLASS_MODULES = new Set(['eq', 'ord', 'num', 'show', 'functor', 'applicative', 'monad', 'monoid']);
 
 function getStdlibModulePath(moduleName: string): string {
   if (STDLIB_TYPECLASS_MODULES.has(moduleName)) {
