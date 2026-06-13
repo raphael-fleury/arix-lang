@@ -945,9 +945,7 @@ export class Transpiler {
         }
         if (fn.params.length === 2 && fn.params[0].name === '_left' && fn.params[1].name === '_right' && fn.body.type === 'BinaryExpr') {
           const bin = fn.body as BinaryExpr;
-          const left = this.transpileExpr(bin.left);
-          const right = this.transpileExpr(bin.right);
-          const op = getOperator(bin.operator);
+            const op = getOperator(bin.operator);
           return `(_left, _right) => (_left ${op} _right)`;
         }
         const paramNames = new Set(fn.params.map(p => p.name));
