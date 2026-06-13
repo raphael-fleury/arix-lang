@@ -65,6 +65,33 @@ describe('TypeChecker', () => {
     expect(diagnostics).toHaveLength(0);
   });
 
+  it('accepts exhaustive List match with [] and [head | rest]', () => {
+    const diagnostics = runCheck(
+      [
+        'type List(a) = Nil | Cons(head: a, tail: List(a))',
+        'fn reduce(acc, f, list List(Int)) =',
+        '  match list:',
+        '    [] -> acc',
+        '    [head | rest] -> reduce(f(acc, head), f, rest)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4001')).toBe(false);
+  });
+
+  it('reports non-exhaustive List match when only [] arm exists', () => {
+    const diagnostics = runCheck(
+      [
+        'type List(a) = Nil | Cons(head: a, tail: List(a))',
+        'fn onlyNil(list List(Int)) =',
+        '  match list:',
+        '    [] -> 0',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4001')).toBe(true);
+  });
+
   it('rejects reserved js identifier declarations', () => {
     const diagnostics = runCheck('fn main(js) = js');
     expect(diagnostics.some(d => d.code === 'ARX1003' || d.code === 'ARX1004')).toBe(true);

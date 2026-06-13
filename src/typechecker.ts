@@ -574,8 +574,9 @@ export class TypeChecker {
       if (arm.pattern.type === 'WildcardPattern') {
         hasWildcard = true;
       }
-      if (arm.pattern.type === 'ConstructorPattern') {
-        seenVariants.add(arm.pattern.name);
+      const coveredVariants = this.getCoveredVariantsForPattern(arm.pattern, matchedType);
+      for (const variant of coveredVariants) {
+        seenVariants.add(variant);
       }
 
       this.withScope(() => {
@@ -605,6 +606,32 @@ export class TypeChecker {
         'Add the missing constructor patterns or add a wildcard arm (_).',
       );
     }
+  }
+
+  private getCoveredVariantsForPattern(pattern: Pattern, matchedType: string | undefined): string[] {
+    if (pattern.type === 'ConstructorPattern') {
+      return [pattern.name];
+    }
+
+    if (pattern.type === 'ListPattern') {
+      const expectedVariants = matchedType ? this.adtVariants.get(matchedType) : undefined;
+      if (!expectedVariants) {
+        return [];
+      }
+
+      const hasListAdtShape = expectedVariants.has('Nil') && expectedVariants.has('Cons');
+      if (!hasListAdtShape) {
+        return [];
+      }
+
+      if (pattern.elements.length === 0 && !pattern.rest) {
+        return ['Nil'];
+      }
+
+      return ['Cons'];
+    }
+
+    return [];
   }
 
   private validateTypeclassInstances(program: Program): void {
