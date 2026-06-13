@@ -1284,9 +1284,6 @@ export class Transpiler {
     if (name === 'Cons') {
       return '__listCons';
     }
-    if (name === 'print') {
-      return 'print';
-    }
 
     const importNamespace = this.importedNames.get(name);
     if (importNamespace !== undefined) {
@@ -1686,6 +1683,7 @@ export class Transpiler {
       applicative: ['Applicative', 'pure', 'apply'],
       monad: ['Monad', 'pureM', 'flatMap'],
       monoid: ['Monoid', 'empty', 'combine'],
+      prelude: ['apply', 'compose', 'pipe', 'print'],
     };
     return fallback[moduleName] || [];
   }
