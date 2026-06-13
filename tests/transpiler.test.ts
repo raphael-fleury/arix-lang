@@ -31,7 +31,13 @@ function evalTranspiled(js: string, mainCall = true): unknown {
 
 describe('Transpiler', () => {
   it('transpiles decorators as function metadata', () => {
-    const ast = parse('@Test\n@Operator("**", "infixl", 7)\nfn pow(a, b) = a\nfn main() = pow._decorators.length');
+    const src = [
+      '@Test',
+      '@Operator("**", "infixl", 7)',
+      'fn pow(a, b) = a',
+      'fn main() = pow._decorators.length',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(1);
@@ -41,7 +47,12 @@ describe('Transpiler', () => {
   it('applies @Deprecated built-in decorator behavior', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      const ast = parse('@Deprecated("Use divideSafe")\nfn divide(a, b) = a / b\nfn main() = divide(4, 2)');
+      const src = [
+        '@Deprecated("Use divideSafe")',
+        'fn divide(a, b) = a / b',
+        'fn main() = divide(4, 2)',
+      ].join('\n');
+      const ast = parse(src);
       const js = transpile(ast);
       const result = eval(js + '\nmain()');
       expect(result).toBe(2);
@@ -53,7 +64,15 @@ describe('Transpiler', () => {
   });
 
   it('applies @Memo built-in decorator behavior', () => {
-    const ast = parse('@Memo\nfn roll(seed) = js.Math.random()\nfn main() =\n  let first = roll(7)\n  let second = roll(7)\n  first == second');
+    const src = [
+      '@Memo',
+      'fn roll(seed) = js.Math.random()',
+      'fn main() =',
+      '  let first = roll(7)',
+      '  let second = roll(7)',
+      '  first == second',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toBe(true);
@@ -67,28 +86,44 @@ describe('Transpiler', () => {
   });
 
   it('transpiles function call', () => {
-    const ast = parse('fn double(x) = x * 2\nfn main() = double(5)');
+    const src = [
+      'fn double(x) = x * 2',
+      'fn main() = double(5)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(10);
   });
 
   it('transpiles arrow function', () => {
-    const ast = parse('fn add(a, b) = a + b\nfn main() = add(3, 4)');
+    const src = [
+      'fn add(a, b) = a + b',
+      'fn main() = add(3, 4)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(7);
   });
 
   it('transpiles async function', () => {
-    const ast = parse('async fn fetchVal() = 42\nfn main() = fetchVal()');
+    const src = [
+      'async fn fetchVal() = 42',
+      'fn main() = fetchVal()',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result instanceof Promise).toBe(true);
   });
 
   it('transpiles section operator', () => {
-    const ast = parse('fn map(f, xs) = [f(x) for x in xs]\nfn main() = map(* 2, [1, 2, 3])');
+    const src = [
+      'fn map(f, xs) = [f(x) for x in xs]',
+      'fn main() = map(* 2, [1, 2, 3])',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([2, 4, 6]);
@@ -102,7 +137,11 @@ describe('Transpiler', () => {
   });
 
   it('transpiles match in context', () => {
-    const ast = parse('fn classify(x) = match x: 1 -> "one" 2 -> "two" _ -> "other"\nfn main() = classify(2)');
+    const src = [
+      'fn classify(x) = match x: 1 -> "one" 2 -> "two" _ -> "other"',
+      'fn main() = classify(2)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe('two');
@@ -128,33 +167,57 @@ describe('Transpiler', () => {
   });
 
   it('transpiles bare nullary constructors', () => {
-    const src = 'type Flag = On | Off\nfn main() = On';
+    const src = [
+      'type Flag = On | Off',
+      'fn main() = On',
+    ].join('\n');
     const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('Flag.On()');
   });
 
   it('transpiles for loop', () => {
-    const ast = parse('fn main() =\n  for x in [1, 2, 3]:\n    x');
+    const src = [
+      'fn main() =',
+      '  for x in [1, 2, 3]:',
+      '    x',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('for');
     expect(js).toContain('of');
   });
 
   it('transpiles while loop', () => {
-    const ast = parse('fn main() =\n  let mut x = 0\n  while x < 5:\n    x = x + 1');
+    const src = [
+      'fn main() =',
+      '  let mut x = 0',
+      '  while x < 5:',
+      '    x = x + 1',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('while');
   });
 
   it('transpiles break statement', () => {
-    const ast = parse('fn main() =\n  for x in [1]:\n    break');
+    const src = [
+      'fn main() =',
+      '  for x in [1]:',
+      '    break',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('break');
   });
 
   it('transpiles continue statement', () => {
-    const ast = parse('fn main() =\n  for x in [1]:\n    continue');
+    const src = [
+      'fn main() =',
+      '  for x in [1]:',
+      '    continue',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('continue');
   });
@@ -174,7 +237,13 @@ describe('Transpiler', () => {
   });
 
   it('transpiles block expression', () => {
-    const ast = parse('fn main() =\n  let x = 10\n  let y = 5\n  x + y');
+    const src = [
+      'fn main() =',
+      '  let x = 10',
+      '  let y = 5',
+      '  x + y',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(15);
@@ -205,20 +274,33 @@ describe('Transpiler', () => {
   });
 
   it('transpiles pipe expression', () => {
-    const ast = parse('fn length(xs) = 3\nfn main() = [1, 2, 3] |> length');
+    const src = [
+      'fn length(xs) = 3',
+      'fn main() = [1, 2, 3] |> length',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('length');
   });
 
   it('transpiles $ as function application', () => {
-    const ast = parse('fn inc(x) = x + 1\nfn main() = inc $ 41');
+    const src = [
+      'fn inc(x) = x + 1',
+      'fn main() = inc $ 41',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(42);
   });
 
   it('transpiles . as function composition', () => {
-    const ast = parse('fn f(x) = x + 1\nfn g(x) = x * 2\nfn main() = (f . g)(3)');
+    const src = [
+      'fn f(x) = x + 1',
+      'fn g(x) = x * 2',
+      'fn main() = (f . g)(3)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(7);
@@ -259,35 +341,59 @@ describe('Transpiler', () => {
   });
 
   it('transpiles let declaration with identifier pattern', () => {
-    const ast = parse('fn main() =\n  let x = 10\n  x + 5');
+    const src = [
+      'fn main() =',
+      '  let x = 10',
+      '  x + 5',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(15);
   });
 
   it('transpiles let declaration with record pattern', () => {
-    const ast = parse('fn main() =\n  let { x, y } = {x: 10, y: 20}\n  x + y');
+    const src = [
+      'fn main() =',
+      '  let { x, y } = {x: 10, y: 20}',
+      '  x + y',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(30);
   });
 
   it('transpiles let declaration with list pattern', () => {
-    const ast = parse('fn main() =\n  let [a, b, c] = [1, 2, 3]\n  a + b + c');
+    const src = [
+      'fn main() =',
+      '  let [a, b, c] = [1, 2, 3]',
+      '  a + b + c',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(6);
   });
 
   it('transpiles let mut declaration', () => {
-    const ast = parse('fn main() =\n  let mut obj = {x: 0}\n  obj');
+    const src = [
+      'fn main() =',
+      '  let mut obj = {x: 0}',
+      '  obj',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toEqual({x: 0});
   });
 
   it('transpiles currying partial application', () => {
-    const ast = parse('fn add(a, b, c) = a + b + c\nfn main() = add(10)(20)(30)');
+    const src = [
+      'fn add(a, b, c) = a + b + c',
+      'fn main() = add(10)(20)(30)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(60);
@@ -308,7 +414,11 @@ describe('Transpiler', () => {
   });
 
   it('transpiles custom ADT type declaration', () => {
-    const ast = parse('type Status = Active | Inactive\nfn main() = Status');
+    const src = [
+      'type Status = Active | Inactive',
+      'fn main() = Status',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('createADT');
     expect(js).toContain('Status');
@@ -317,7 +427,11 @@ describe('Transpiler', () => {
   });
 
   it('transpiles ADT with fields', () => {
-    const ast = parse('type UserStatus = Active(id) | Inactive(id, reason)\nfn main() = UserStatus');
+    const src = [
+      'type UserStatus = Active(id) | Inactive(id, reason)',
+      'fn main() = UserStatus',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     expect(js).toContain('createADT');
     expect(js).toContain('UserStatus');
@@ -326,7 +440,11 @@ describe('Transpiler', () => {
   });
 
   it('transpiles record type declaration', () => {
-    const ast = parse('type User = { name String, age Int ?? 18 }\nfn main() = User');
+    const src = [
+      'type User = { name String, age Int ?? 18 }',
+      'fn main() = User',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
 
     expect(js).toContain('const User = {');
@@ -336,9 +454,11 @@ describe('Transpiler', () => {
   });
 
   it('transpiles custom ADT instantiation and pattern matching', () => {
-    const code = `type Status = Active | Inactive
-fn createStatus() = Status.Active`;
-    const ast = parse(code);
+    const src = [
+      'type Status = Active | Inactive',
+      'fn createStatus() = Status.Active',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     // Verify the transpiled code contains expected ADT elements
     expect(js).toContain('createADT');
@@ -347,28 +467,44 @@ fn createStatus() = Status.Active`;
   });
 
   it('transpiles function with type annotations - primitives', () => {
-    const ast = parse('fn add(a Int, b Int) -> Int = a + b\nfn main() = add(5, 3)');
+    const src = [
+      'fn add(a Int, b Int) -> Int = a + b',
+      'fn main() = add(5, 3)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(8);
   });
 
   it('transpiles function with type annotations - strings', () => {
-    const ast = parse('fn greet(name String) -> String = "Hello " ++ name\nfn main() = greet("World")');
+    const src = [
+      'fn greet(name String) -> String = "Hello " ++ name',
+      'fn main() = greet("World")',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe('Hello World');
   });
 
   it('transpiles function with generic type annotations', () => {
-    const ast = parse('fn process(nums List(Int)) -> List(Int) = [x * 2 for x in nums]\nfn main() = process([1, 2, 3])');
+    const src = [
+      'fn process(nums List(Int)) -> List(Int) = [x * 2 for x in nums]',
+      'fn main() = process([1, 2, 3])',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([2, 4, 6]);
   });
 
   it('transpiles multiple parameters with type annotations', () => {
-    const ast = parse('fn combine(x Int, y Int, z Int) -> Int = x + y + z\nfn main() = combine(1, 2, 3)');
+    const src = [
+      'fn combine(x Int, y Int, z Int) -> Int = x + y + z',
+      'fn main() = combine(1, 2, 3)',
+    ].join('\n');
+    const ast = parse(src);
     const js = transpile(ast);
     const result = eval(js + '\nmain()');
     expect(result).toBe(6);
@@ -710,55 +846,60 @@ fn createStatus() = Status.Active`;
 
   describe('Anonymous Functions (lambda syntax)', () => {
     it('transpiles single-param lambda', () => {
-      const ast = parse([
+      const src = [
         'fn main() =',
         '  let f = (x) -> x * 2',
         '  f(5)',
-      ].join('\n'));
+      ].join('\n');
+      const ast = parse(src);
       const js = transpile(ast);
       const result = eval(js + '\nmain()');
       expect(result).toBe(10);
     });
 
     it('transpiles lambda passed as argument', () => {
-      const ast = parse([
+      const src = [
         'fn map(f, xs) = [f(x) for x in xs]',
         'fn main() =',
         '  map((x) -> x * 2, [1, 2, 3])',
-      ].join('\n'));
+      ].join('\n');
+      const ast = parse(src);
       const js = transpile(ast);
       const result = normalizeListValue(eval(js + '\nmain()'));
       expect(result).toEqual([2, 4, 6]);
     });
 
     it('transpiles higher-order lambda', () => {
-      const ast = parse([
+      const src = [
         'fn main() =',
         '  let adder = (n) -> (x) -> x + n',
         '  adder(5)(3)',
-      ].join('\n'));
+      ].join('\n');
+      const ast = parse(src);
       const js = transpile(ast);
       const result = eval(js + '\nmain()');
       expect(result).toBe(8);
     });
 
     it('transpiles multi-param lambda', () => {
-      const ast = parse([
+      const src = [
         'fn main() =',
         '  let f = (a, b) -> a + b',
         '  f(3, 4)',
-      ].join('\n'));
+      ].join('\n');
+      const ast = parse(src);
       const js = transpile(ast);
       const result = eval(js + '\nmain()');
       expect(result).toBe(7);
     });
 
     it('transpiles zero-param lambda', () => {
-      const ast = parse([
+      const src = [
         'fn main() =',
         '  let f = () -> 42',
         '  f()',
-      ].join('\n'));
+      ].join('\n');
+      const ast = parse(src);
       const js = transpile(ast);
       const result = eval(js + '\nmain()');
       expect(result).toBe(42);
