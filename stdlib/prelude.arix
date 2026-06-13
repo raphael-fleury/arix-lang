@@ -1,2 +1,16 @@
-fn print(x a) where Show(a) =
+import bool(True)
+import show(Show, show)
+
+@Operator("$", "infixl", 0)
+public fn apply(f, x) = f(x)
+
+@Operator(".", "infixl", 9)
+public fn compose(f, g) =
+  let foo = (x) -> g(f(x))
+  foo
+
+@Operator("|>", "infixl", 1)
+public fn pipe(x, f) = f(x)
+
+public fn print(x a) where Show(a) =
   js.console.log(show(x))
