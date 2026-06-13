@@ -44,7 +44,7 @@ import type {
 const RUNTIME_IMPORT = (relativePath: string) => 
   `import { createADT, print } from '${relativePath}';`;
 
-const STDLIB_MODULES = ['bool', 'eq', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
 const JS_NAMESPACE = 'js';
 
 interface GlobalInstanceInfo {
