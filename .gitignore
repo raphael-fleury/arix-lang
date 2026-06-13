@@ -1,4 +1,5 @@
 examples/
+tmp/
 
 # Dependencies
 node_modules/
