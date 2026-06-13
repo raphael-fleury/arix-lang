@@ -393,11 +393,6 @@ class Parser {
         break;
       }
       
-      // Stop at new function declarations at top level
-      if (this.current().type === 'KEYWORD' && ['fn', 'async', 'type', 'import', 'public', 'internal'].includes(this.current().value)) {
-        break;
-      }
-      
       // Use parseStatement() to handle let, for, while, break, continue, etc.
       if (this.current().type !== 'EOF' && this.current().type !== 'DEDENT') {
         const stmt = this.parseStatement();
