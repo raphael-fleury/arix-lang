@@ -1374,7 +1374,7 @@ export class TypeChecker {
       return;
     }
 
-    if (this.isNameDeclared(name) || this.importedNames.has(name) || this.knownFunctions.has(name) || this.knownConstructors.has(name)) {
+    if (this.isNameDeclared(name) || this.importedNames.has(name) || this.knownFunctions.has(name) || this.knownConstructors.has(name) || this.knownTypeDecls.has(name) || this.adtVariants.has(name)) {
       return;
     }
 
