@@ -1,0 +1,31 @@
+typeclass Num(a)
+  @Operator("+", "infix", 4)
+  add(x a, y a) -> a
+  @Operator("-", "infix", 4)
+  subtract(x a, y a) -> a
+  @Operator("*", "infix", 4)
+  multiply(x a, y a) -> a
+  @Operator("/", "infix", 4)
+  divide(x a, y a) -> a
+  @Operator("-", "prefix", 4)
+  negate(x a) -> a
+  abs(x a) -> a
+  signum(x a) -> a
+
+impl Num for Int
+  add(x, y) = js.ADD(x, y)
+  subtract(x, y) = js.SUB(x, y)
+  multiply(x, y) = js.MUL(x, y)
+  divide(x, y) = js.DIV(x, y)
+  negate(x) = js.NEG(x)
+  abs(x) = if x < 0 then js.NEG(x) else x
+  signum(x) = if x < 0 then js.NEG(1) else if x > 0 then js.NEG(-1) else 0
+
+impl Num for Float
+  add(x, y) = js.ADD(x, y)
+  subtract(x, y) = js.SUB(x, y)
+  multiply(x, y) = js.MUL(x, y)
+  divide(x, y) = js.DIV(x, y)
+  negate(x) = js.NEG(x)
+  abs(x) = if x < 0.0 then js.NEG(x) else x
+  signum(x) = if x < 0.0 then js.NEG(1.0) else if x > 0.0 then js.NEG(-1.0) else 0.0

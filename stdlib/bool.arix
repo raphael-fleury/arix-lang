@@ -3,3 +3,21 @@ Bool - canonical boolean ADT.
 """
 
 type Bool = True | False
+
+@Operator("&&", "infix", 3)
+fn and(x Bool, y Bool) =
+  match x:
+    True -> y
+    False -> False
+
+@Operator("||", "infix", 2)
+fn or(x Bool, y Bool) =
+  match x:
+    True -> True
+    False -> y
+
+@Operator("!", "prefix", 4)
+fn not(x Bool) =
+  match x:
+    True -> False
+    False -> True

@@ -1,0 +1,27 @@
+typeclass Ord(a)
+  @Operator("<", "infix", 4)
+  lt(x a, y a) -> Bool
+  @Operator(">", "infix", 4)
+  gt(x a, y a) -> Bool
+  @Operator("<=", "infix", 4)
+  lte(x a, y a) -> Bool = !(gt(x, y))
+  @Operator(">=", "infix", 4)
+  gte(x a, y a) -> Bool = !(lt(x, y))
+
+impl Ord for Int
+  lt(x, y) = js.LT(x, y)
+  gt(x, y) = js.GT(x, y)
+  lte(x, y) = js.LTE(x, y)
+  gte(x, y) = js.GTE(x, y)
+
+impl Ord for Float
+  lt(x, y) = js.LT(x, y)
+  gt(x, y) = js.GT(x, y)
+  lte(x, y) = js.LTE(x, y)
+  gte(x, y) = js.GTE(x, y)
+
+impl Ord for String
+  lt(x, y) = js.LT(x, y)
+  gt(x, y) = js.GT(x, y)
+  lte(x, y) = js.LTE(x, y)
+  gte(x, y) = js.GTE(x, y)
