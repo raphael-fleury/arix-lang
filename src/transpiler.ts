@@ -42,9 +42,9 @@ import type {
 
 // Runtime import will be generated dynamically based on output location
 const RUNTIME_IMPORT = (relativePath: string) => 
-  `import { createADT, print } from '${relativePath}';`;
+  `import { createADT } from '${relativePath}';`;
 
-const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid'];
+const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid', 'prelude'];
 const JS_NAMESPACE = 'js';
 
 interface GlobalInstanceInfo {

@@ -56,12 +56,6 @@ function createADT(name, variants) {
   return adt;
 }
 
-function print(value) {
-  const display = value !== null && value !== undefined ? String(value) : 'null';
-  console.log(display);
-  return display;
-}
-
 /**
  * Namespace for native JavaScript operators
  * Used when operator implementations need to access raw JS operations
@@ -101,6 +95,5 @@ const js = {
 
 export {
   createADT,
-  print,
   js
 };
