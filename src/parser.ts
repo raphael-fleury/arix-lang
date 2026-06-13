@@ -314,7 +314,7 @@ class Parser {
     
     // Check if body is multi-line (starts with INDENT) or a keyword that needs block context
     if (this.current().type === 'INDENT' || 
-        (this.current().type === 'KEYWORD' && ['let', 'if', 'match'].includes(this.current().value))) {
+        (this.current().type === 'KEYWORD' && this.current().value === 'let')) {
       body = this.parseBlockBody();
     } else {
       body = this.parseExpr();
@@ -763,7 +763,7 @@ class Parser {
     this.skipNewlines();
     if (
       this.current().type === 'INDENT' ||
-      (this.current().type === 'KEYWORD' && ['let', 'if', 'match'].includes(this.current().value))
+      (this.current().type === 'KEYWORD' && this.current().value === 'let')
     ) {
       return this.parseBlockBody();
     }
@@ -1711,7 +1711,7 @@ class Parser {
       this.skipNewlines();
       
       if (this.current().type === 'INDENT' || 
-          (this.current().type === 'KEYWORD' && ['let', 'if', 'match'].includes(this.current().value))) {
+          (this.current().type === 'KEYWORD' && this.current().value === 'let')) {
         body = this.parseBlockBody();
       } else {
         body = this.parseExpr();

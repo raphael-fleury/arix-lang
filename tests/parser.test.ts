@@ -421,6 +421,19 @@ describe('Parser', () => {
     expect(inst.methods.length).toBe(2);
   });
 
+  it('parses instance methods after inline if expression bodies', () => {
+    const src = [
+      'impl Num for Int',
+      '  abs(x) = if x < 0 then -x else x',
+      '  signum(x) = if x < 0 then -1 else if x > 0 then 1 else 0',
+    ].join('\n');
+    const ast = parse(src);
+    const inst = ast.body[0] as any;
+    expect(inst.methods.length).toBe(2);
+    expect(inst.methods[0].name).toBe('abs');
+    expect(inst.methods[1].name).toBe('signum');
+  });
+
   it('parses decorators on impl methods', () => {
     const src = [
       'impl Show for Int',
