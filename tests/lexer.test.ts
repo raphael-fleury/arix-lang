@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tokenize, OPERATORS, ESCAPE_SEQUENCES } from '../src/lexer.js';
+import { tokenize, ESCAPE_SEQUENCES, isValidOperatorSymbol } from '../src/lexer.js';
 
 function nonEmpty(tokens: ReturnType<typeof tokenize>) {
   return tokens.filter(t => !(t.type === 'EOF' && t.value === ''));
@@ -226,16 +226,26 @@ describe('Lexer', () => {
     expect(ops).toEqual(['??=']);
   });
 
-  it('tokenizes all operators as single tokens with greedy matching', () => {
-    for (const op of OPERATORS) {
-      // Wrap operator with spaces and identifier to ensure isolation
+  it('tokenizes arbitrary operator symbols as single tokens with greedy matching', () => {
+    const samples = ['+', '==', '??=', '!!', '<=>', '|><|', '$$$', '.'];
+    for (const op of samples) {
       const code = `a ${op} b`;
       const tokens = tokenize(code);
       const operators = tokens.filter(t => t.type === 'OPERATOR');
-      
+
       expect(operators).toHaveLength(1);
       expect(operators[0].value).toBe(op);
     }
+  });
+
+  it('validates operator symbols using the language operator charset', () => {
+    expect(isValidOperatorSymbol('+')).toBe(true);
+    expect(isValidOperatorSymbol('<=>')).toBe(true);
+    expect(isValidOperatorSymbol('??=')).toBe(true);
+    expect(isValidOperatorSymbol('abc')).toBe(false);
+    expect(isValidOperatorSymbol('|')).toBe(false);
+    expect(isValidOperatorSymbol('./')).toBe(false);
+    expect(isValidOperatorSymbol('../')).toBe(false);
   });
 
   it('detects unterminated strings', () => {

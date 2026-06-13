@@ -151,8 +151,13 @@ describe('Parser', () => {
   });
 
   it('parses $ as right-associative function application operator', () => {
-    const ast = parse('let y = print $ f $ x');
-    const letDecl = ast.body[0] as any;
+    const src = [
+      '@Operator("$", "infixr", 1)',
+      'fn apply(f, x) = f(x)',
+      'let y = print $ f $ x',
+    ].join('\n');
+    const ast = parse(src);
+    const letDecl = ast.body[1] as any;
     expect(letDecl.value.type).toBe('BinaryExpr');
     expect(letDecl.value.operator).toBe('$');
     expect(letDecl.value.right.type).toBe('BinaryExpr');

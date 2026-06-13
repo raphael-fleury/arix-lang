@@ -29,16 +29,8 @@ export const KEYWORDS = [
   'where', 'return', 'break', 'continue',
 ] as const;
 
-export const OPERATORS = [
-  '+', '-', '*', '/', '%', // Arithmetic
-  '==', '!=', '<', '>', '<=', '>=', // Comparison
-  '&&', '||', '!', // Logical
-  '++', '+=', '-=', '*=', '/=', '??=', // Mutation
-  '=', '!!', '??', '->', '=>', '|>', '$', '.', // Other
-] as const;
-
-// Operators sorted by length (descending) for greedy matching
-const OPERATORS_BY_LENGTH = [...OPERATORS].sort((a, b) => b.length - a.length);
+const OPERATOR_CHAR_RE = /^[+\-*/%=!<>&|^~?.$]$/;
+const RESERVED_OPERATOR_SYMBOLS = new Set(['./', '../', '|', '->', '=>', '=']);
 
 export const PUNCTUATION = [
   '(', ')', '[', ']', '{', '}', ',', ':', ';', '|',
@@ -55,6 +47,16 @@ export const ESCAPE_SEQUENCES: Record<string, string> = {
   '\\\\': '\\',
   '\\"': '"',
 };
+
+export function isOperatorSymbolChar(char: string): boolean {
+  return OPERATOR_CHAR_RE.test(char);
+}
+
+export function isValidOperatorSymbol(symbol: string): boolean {
+  if (symbol.length === 0) return false;
+  if (RESERVED_OPERATOR_SYMBOLS.has(symbol)) return false;
+  return [...symbol].every(isOperatorSymbolChar);
+}
 
 function processEscapeSequences(str: string): string {
   let result = '';
@@ -94,17 +96,13 @@ export function extractCustomOperatorSymbols(source: string): string[] {
   return symbols;
 }
 
-export function tokenize(source: string, extraOperators: string[] = []): Token[] {
+export function tokenize(source: string): Token[] {
   const tokens: Token[] = [];
   let pos = 0;
   let line = 1;
   let column = 1;
 
   const keywords = new Set(KEYWORDS);
-  const allOperators = extraOperators.length > 0
-    ? [...OPERATORS, ...extraOperators].sort((a, b) => b.length - a.length)
-    : OPERATORS_BY_LENGTH;
-  const operators = new Set<string>([...OPERATORS, ...extraOperators]);
   const punctuation = new Set<string>(PUNCTUATION);
   
   // Indentation tracking
@@ -364,18 +362,25 @@ export function tokenize(source: string, extraOperators: string[] = []): Token[]
       }
     }
 
-    // Operators: try longest matches first (greedy)
-    let operatorFound = false;
-    for (const op of allOperators) {
-      if (source.slice(pos, pos + op.length) === op) {
-        tokens.push({ type: 'OPERATOR', value: op, line, column });
-        pos += op.length;
-        column += op.length;
-        operatorFound = true;
-        break;
-      }
+    // Single '|' is structural punctuation (list/pattern separator).
+    // Multi-char operator sequences starting with '|' remain operators.
+    if (char === '|' && !isOperatorSymbolChar(source[pos + 1] || '')) {
+      tokens.push({ type: 'PUNCTUATION', value: '|', line, column });
+      pos++;
+      column++;
+      continue;
     }
-    if (operatorFound) continue;
+
+    // Operators: greedily consume contiguous operator symbols.
+    if (isOperatorSymbolChar(char)) {
+      const start = pos;
+      while (pos < source.length && isOperatorSymbolChar(source[pos])) {
+        pos++;
+        column++;
+      }
+      tokens.push({ type: 'OPERATOR', value: source.slice(start, pos), line, column: column - (pos - start) });
+      continue;
+    }
 
     // Punctuation
     if (punctuation.has(char)) {

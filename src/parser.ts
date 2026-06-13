@@ -1,4 +1,4 @@
-import { tokenize, extractCustomOperatorSymbols, Token, TokenType } from './lexer.js';
+import { tokenize, isValidOperatorSymbol, Token, TokenType } from './lexer.js';
 import type {
   Node,
   Program,
@@ -69,7 +69,7 @@ class Parser {
   }
 
   parse(source: string): Program {
-    this.tokens = tokenize(source, extractCustomOperatorSymbols(source));
+    this.tokens = tokenize(source);
     this.pos = 0;
     this.preScanOperators();
     const body = this.parseBody();
@@ -127,6 +127,9 @@ class Parser {
       if (fnNameToken?.type !== 'IDENTIFIER') continue;
 
       const sym = symToken.value;
+      if (!isValidOperatorSymbol(sym)) {
+        throw new Error(`Invalid operator symbol \"${sym}\" in @Operator decorator at ${symToken.line}:${symToken.column}`);
+      }
       const assocRaw = assocToken.value.toLowerCase();
       const prec = Number(precToken.value);
       const kind: 'infix' | 'prefix' | 'suffix' =
@@ -790,11 +793,15 @@ class Parser {
         const operand = this.parseUnary();
         return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;
       }
-    }
-    if (this.current().type === 'OPERATOR' && (this.current().value === '!' || this.current().value === '-')) {
-      const operator = this.advance().value;
-      const operand = this.parseUnary();
-      return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;
+
+      const operator = this.current().value;
+      const next = this.peek();
+      const isAdjacent = this.current().line === next.line && this.current().column + operator.length === next.column;
+      if (this.isFallbackPrefixOperator(operator) && isAdjacent && this.canStartUnaryOperand(next)) {
+        this.advance();
+        const operand = this.parseUnary();
+        return { type: 'UnaryExpr', operator, operand, position: 'prefix' } as UnaryExpr;
+      }
     }
     if (this.current().value === 'await') {
       this.advance();
@@ -825,28 +832,30 @@ class Parser {
     let left = this.parsePostfix();
     this.skipNewlines();
 
-    const precedences: Record<string, number> = {
-      '$': 0,
-      '|>': 0,
-      '||': 1, '&&': 2, '==': 3, '!=': 3, '<': 4, '>': 4, '<=': 4, '>=': 4,
-      '+': 5, '-': 5, '*': 6, '/': 6, '%': 6, '++': 7, '.': 8,
-    };
-    // Merge custom operators declared via @Operator
+    const precedences: Record<string, number> = {};
     for (const [sym, info] of this.customOperators) {
       if (info.kind === 'infix') {
         precedences[sym] = info.precedence;
       }
     }
-    const rightAssociative = new Set(['$', '.']);
+    const rightAssociative = new Set<string>();
     for (const [sym, info] of this.customOperators) {
       if (info.kind === 'infix' && info.associativity === 'right') rightAssociative.add(sym);
     }
 
+    // Temporary migration fallback: unknown infix operators still parse with low precedence.
+    // Semantic validation can later reject undeclared operators.
+    const FALLBACK_INFIX_PRECEDENCE = 1;
+
     while (true) {
       this.skipNewlines();
+      if (this.current().type !== 'OPERATOR') break;
       const operator = this.current().value;
-      const precedence = precedences[operator];
-      if (precedence === undefined || precedence < minPrecedence) break;
+      if (operator === '->' || operator === '=>') break;
+      const info = this.customOperators.get(operator);
+      if (info && info.kind !== 'infix') break;
+      const precedence = info?.precedence ?? precedences[operator] ?? FALLBACK_INFIX_PRECEDENCE;
+      if (precedence < minPrecedence) break;
 
       this.advance();
       this.skipNewlines();
@@ -854,7 +863,8 @@ class Parser {
         const right = this.parseCall();
         left = { type: 'PipeExpr', left, right } as PipeExpr;
       } else {
-        const nextPrecedence = rightAssociative.has(operator) ? precedence : precedence + 1;
+        const isRightAssociative = info?.associativity === 'right' || rightAssociative.has(operator);
+        const nextPrecedence = isRightAssociative ? precedence : precedence + 1;
         const right = this.parseBinaryWithPrecedence(nextPrecedence);
         left = { type: 'BinaryExpr', operator, left, right } as BinaryExpr;
       }
@@ -1046,6 +1056,20 @@ class Parser {
       params: [{ type: 'Param', name: '_left', paramType: undefined }, { type: 'Param', name: '_right', paramType: undefined }],
       body: { type: 'BinaryExpr', operator, left: { type: 'Identifier', name: '_left' }, right: { type: 'Identifier', name: '_right' } }
     } as FunctionExpr;
+  }
+
+  private canStartUnaryOperand(token: Token): boolean {
+    if (token.type === 'NUMBER' || token.type === 'STRING' || token.type === 'INTERPOLATED_STRING' || token.type === 'IDENTIFIER') {
+      return true;
+    }
+    if (token.type === 'KEYWORD') {
+      return token.value === 'if' || token.value === 'match' || token.value === 'fn' || token.value === 'None' || token.value === 'await';
+    }
+    return token.value === '(' || token.value === '[' || token.value === '{';
+  }
+
+  private isFallbackPrefixOperator(operator: string): boolean {
+    return operator === '!' || operator === '-' || operator === '+' || operator === '~';
   }
 
   private parseFunctionExpr(): FunctionExpr {
