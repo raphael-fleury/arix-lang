@@ -295,6 +295,25 @@ function collectModuleInfo(arixFile: string): ModuleInfo {
     if (node.type === 'TypeclassDecl') {
       const tc = node as TypeclassDecl;
       exports.push(tc.name);
+      // Extract operators from typeclass methods
+      for (const method of tc.methods) {
+        const opDec = method.decorators?.find(d => d.name === 'Operator');
+        if (opDec && opDec.args.length >= 3) {
+          const symNode = opDec.args[0];
+          const assocNode = opDec.args[1];
+          const precNode = opDec.args[2];
+          if (symNode.type === 'StringLiteral' && assocNode.type === 'StringLiteral' && precNode.type === 'NumberLiteral') {
+            const assocValue = (assocNode as any).value.toLowerCase();
+            operatorDecls.push({
+              symbol: (symNode as any).value,
+              kind: assocValue.startsWith('prefix') ? 'prefix' : assocValue.startsWith('suffix') ? 'suffix' : 'infix',
+              assoc: (assocNode as any).value,
+              prec: (precNode as any).value,
+              fnName: method.name,
+            });
+          }
+        }
+      }
     }
     if (node.type === 'InstanceDecl') {
       const inst = node as InstanceDecl;
@@ -487,6 +506,18 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     throw new Error('Type checking failed.');
   }
 
+  // Collect ALL operators globally before compilation
+  const globalOperatorFns = new Map<string, string>();
+  for (const [filePath, fileInfo] of context.moduleInfoMap) {
+    for (const op of fileInfo.operatorDecls) {
+      globalOperatorFns.set(op.symbol, op.fnName);
+    }
+  }
+
+  if (process.env.DEBUG && globalOperatorFns.size > 0) {
+    console.log(`Global operators available: ${Array.from(globalOperatorFns.keys()).join(', ')}`);
+  }
+
   function compileFile(arixFile: string, isMain = false): void {
     if (compiled[arixFile]) return;
 
@@ -523,6 +554,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
         if (depFile) {
           const depInfo = context.moduleInfoMap.get(depFile);
           if (depInfo) {
+            if (process.env.DEBUG) console.log(`Module ${depFile}: ${depInfo.operatorDecls.length} operators`);
             for (const op of depInfo.operatorDecls) {
               const associativity: 'left' | 'right' | 'none' =
                 op.assoc.toLowerCase() === 'infixr' ? 'right' :
@@ -530,11 +562,14 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
                 'none';
               externalOperators.set(op.symbol, { precedence: op.prec, associativity, kind: op.kind, fnName: op.fnName });
               externalOperatorFns.set(op.symbol, op.fnName);
+              if (process.env.DEBUG) console.log(`  Added operator: ${op.symbol} => ${op.fnName}`);
             }
           }
         }
       }
     }
+
+    if (process.env.DEBUG) console.log(`File ${arixFile}: externalOperatorFns.size = ${externalOperatorFns.size}`);
 
     const ast = parse(source, externalOperators);
     const transpiler = new Transpiler();
@@ -543,7 +578,11 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     transpiler.setGlobalInstances(context.globalInstances);
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
-    if (externalOperatorFns.size > 0) transpiler.setOperatorFns(externalOperatorFns);
+    // Set all global operators, not just the local ones
+    if (globalOperatorFns.size > 0) {
+      if (process.env.DEBUG) console.log(`Setting operator functions: ${Array.from(globalOperatorFns.keys()).join(', ')}`);
+      transpiler.setOperatorFns(globalOperatorFns);
+    }
 
     const jsCode = transpiler.transpile(ast, arixFile);
     compiled[outputFile] = jsCode;

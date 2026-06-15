@@ -72,7 +72,7 @@ export class Transpiler {
   private importedNames: Map<string, string> = new Map();
   private moduleInfoMap: Map<string, { exports: string[]; imports: string[] }> = new Map();
   private moduleNamespaces: Map<string, string> = new Map();
-  private needsRuntime = false;
+  private runtimeImports: Set<string> = new Set(); // Track what to import from runtime
   private outputDir: string = '';
   private autoRunMain = false;
   private variantFieldNames: Map<string, string[]> = new Map();
@@ -111,10 +111,10 @@ export class Transpiler {
     this.moduleNamespaces.clear();
     this.instanceCounter = 0;
     this.currentFilePath = filePath;
-    this.needsRuntime = false;
+    this.runtimeImports.clear();
     this.needsBoolHelpers = false;
     this.needsDecoratorHelpers = false;
-    this.operatorFns = new Map();
+    // NOTE: Don't reset operatorFns here - it's set by setOperatorFns() and should be preserved
     this.scopeStack = [new Set()];
 
     const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
@@ -275,8 +275,9 @@ export class Transpiler {
     // Add ESM imports at the top (including runtime import if needed)
     let topImports: string[] = [];
     
-    if (this.needsRuntime) {
-      topImports.push(RUNTIME_IMPORT('./arix-runtime.js'));
+    if (this.runtimeImports.size > 0) {
+      const runtimeItems = Array.from(this.runtimeImports).sort();
+      topImports.push(`import { ${runtimeItems.join(', ')} } from './arix-runtime.js';`);
     }
     
     topImports.push(...this.esmImports);
@@ -562,7 +563,7 @@ export class Transpiler {
       }).join(', ');
       this.writeln(`const ${node.name} = { ${fields} };`);
     } else {
-      this.needsRuntime = true;
+      this.runtimeImports.add('createADT');
       
       const variants: Record<string, string[]> = {};
       for (const variant of node.variants) {
@@ -654,8 +655,6 @@ export class Transpiler {
       return;
     }
 
-    this.needsRuntime = true;
-    
     const jsPath = this.moduleToJsPath(node.module, node.isRelative);
     
     const moduleName = this.getModuleName(node.module);
@@ -875,7 +874,6 @@ export class Transpiler {
         if (call.callee.type === 'Identifier') {
           const funcName = (call.callee as Identifier).name;
           if (funcName === 'print') {
-            this.needsRuntime = true;
             isPrintCall = true;
           }
         }
@@ -1307,7 +1305,8 @@ export class Transpiler {
   private transpileMemberExpr(member: MemberExpr): string {
     const property = (member.property as Identifier).name;
     if (member.object.type === 'Identifier' && (member.object as Identifier).name === JS_NAMESPACE) {
-      return `globalThis.${property}`;
+      this.runtimeImports.add('js');
+      return `js.${property}`;
     }
     if (member.object.type === 'MemberExpr' && this.isJsInteropMember(member.object as MemberExpr)) {
       return `${this.transpileMemberExpr(member.object as MemberExpr)}.${property}`;
@@ -1681,7 +1680,7 @@ export class Transpiler {
       result: ['Result', 'Ok', 'Err'],
       functor: ['Functor', 'map'],
       applicative: ['Applicative', 'pure', 'apply'],
-      monad: ['Monad', 'pureM', 'flatMap'],
+      monad: ['Monad', 'flatMap'],
       monoid: ['Monoid', 'empty', 'combine'],
       prelude: ['apply', 'compose', 'pipe', 'print'],
     };

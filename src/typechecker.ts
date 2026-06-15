@@ -28,7 +28,7 @@ const STDLIB_FALLBACK_EXPORTS: Record<string, string[]> = {
   result: ['Result', 'Ok', 'Err'],
   functor: ['Functor', 'map'],
   applicative: ['Applicative', 'pure', 'apply'],
-  monad: ['Monad', 'pureM', 'flatMap'],
+  monad: ['Monad', 'flatMap'],
   monoid: ['Monoid', 'empty', 'combine'],
 };
 
