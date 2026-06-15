@@ -62,7 +62,6 @@ impl Applicative for List
             [f | fs] -> append(map(x, f), apply(x, fs))
 
 impl Monad for List
-    pureM(x, value) = [value]
     flatMap(x, f) =
         match x:
             [] -> []

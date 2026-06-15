@@ -6,6 +6,7 @@ Note: `empty` receives a witness value so dispatch can choose the correct instan
 
 typeclass Monoid(a)
   empty(x a) -> a
+  @Operator("<>", "infixr", 6)
   combine(x a, y a) -> a
   mconcat(x a, xs List(a)) -> a = match xs:
     [] -> empty(x)

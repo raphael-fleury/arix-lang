@@ -30,7 +30,6 @@ impl Applicative for Result
             Err(e) -> Err(e)
 
 impl Monad for Result
-    pureM(x, value) = Ok(value)
     flatMap(x, f) =
         match x:
             Ok(v) -> f(v)

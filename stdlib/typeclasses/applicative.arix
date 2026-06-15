@@ -2,6 +2,7 @@
 Applicative typeclass.
 """
 
-typeclass Applicative(f)
+typeclass Applicative(f) where Functor(f)
   pure(x f(a), value a) -> f(a)
+  @Operator("<*>", "infixl", 4)
   apply(x f(a), ff) -> f(b)

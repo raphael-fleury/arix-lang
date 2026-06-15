@@ -41,7 +41,6 @@ impl Applicative for Maybe
             None -> None
 
 impl Monad for Maybe
-    pureM(x, value) = Some(value)
     flatMap(x, f) =
         match x:
             Some(v) -> f(v)

@@ -2,8 +2,8 @@
 Monad typeclass.
 """
 
-typeclass Monad(m)
-  pureM(x m(a), value a) -> m(a)
+typeclass Monad(m) where Applicative(m)
+  @Operator(">>=", "infixl", 1)
   flatMap(x m(a), f) -> m(b)
-  mapM(x m(a), f) -> m(b) = flatMap(x, (v) -> pureM(x, f(v)))
-  flatten(x m(m(a))) -> m(a) = flatMap(x, (v) -> v)
+  @Operator(">>", "infixl", 1)
+  andThen(x m(a), y m(b)) -> m(b) = x >>= (_) -> y
