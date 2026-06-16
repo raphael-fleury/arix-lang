@@ -57,41 +57,54 @@ function createADT(name, variants) {
 }
 
 /**
- * Namespace for native JavaScript operators
+ * Namespace for native JavaScript operators and globals
  * Used when operator implementations need to access raw JS operations
  * Example: In impl Eq for Int, use js.EQ(x, y) instead of x == y
+ * Also provides access to globals like js.console, js.Math, etc.
  */
-const js = {
-  // Comparison operators
-  EQ: (a, b) => a === b,
-  NE: (a, b) => a !== b,
-  LT: (a, b) => a < b,
-  GT: (a, b) => a > b,
-  LTE: (a, b) => a <= b,
-  GTE: (a, b) => a >= b,
-  
-  // Arithmetic operators
-  ADD: (a, b) => a + b,
-  SUB: (a, b) => a - b,
-  MUL: (a, b) => a * b,
-  DIV: (a, b) => a / b,
-  MOD: (a, b) => a % b,
-  POW: (a, b) => a ** b,
-  
-  // Logical operators (JS truthiness)
-  AND: (a, b) => a && b,
-  OR: (a, b) => a || b,
-  NOT: (a) => !a,
-  
-  // Bitwise operators
-  BAND: (a, b) => a & b,
-  BOR: (a, b) => a | b,
-  BXOR: (a, b) => a ^ b,
-  BNOT: (a) => ~a,
-  LSHIFT: (a, b) => a << b,
-  RSHIFT: (a, b) => a >> b,
-  URSHIFT: (a, b) => a >>> b,
-};
+const js = new Proxy(
+  {
+    // Comparison operators
+    EQ: (a, b) => a === b,
+    NE: (a, b) => a !== b,
+    LT: (a, b) => a < b,
+    GT: (a, b) => a > b,
+    LTE: (a, b) => a <= b,
+    GTE: (a, b) => a >= b,
+    
+    // Arithmetic operators
+    ADD: (a, b) => a + b,
+    SUB: (a, b) => a - b,
+    MUL: (a, b) => a * b,
+    DIV: (a, b) => a / b,
+    MOD: (a, b) => a % b,
+    POW: (a, b) => a ** b,
+    
+    // Logical operators (JS truthiness)
+    AND: (a, b) => a && b,
+    OR: (a, b) => a || b,
+    NOT: (a) => !a,
+    
+    // Bitwise operators
+    BAND: (a, b) => a & b,
+    BOR: (a, b) => a | b,
+    BXOR: (a, b) => a ^ b,
+    BNOT: (a) => ~a,
+    LSHIFT: (a, b) => a << b,
+    RSHIFT: (a, b) => a >> b,
+    URSHIFT: (a, b) => a >>> b,
+  },
+  {
+    get(target, prop) {
+      // First check if it's a defined operator
+      if (prop in target) {
+        return target[prop];
+      }
+      // Otherwise, forward to globalThis for JS interop
+      return globalThis[prop];
+    }
+  }
+);
 
 export {
   createADT,
