@@ -1,3 +1,5 @@
+import bool(True, False)
+
 typeclass Ord(a)
   @Operator("<", "infix", 4)
   lt(x a, y a) -> Bool
@@ -9,19 +11,19 @@ typeclass Ord(a)
   gte(x a, y a) -> Bool = !(lt(x, y))
 
 impl Ord for Int
-  lt(x, y) = js.LT(x, y)
-  gt(x, y) = js.GT(x, y)
-  lte(x, y) = js.LTE(x, y)
-  gte(x, y) = js.GTE(x, y)
+  lt(x, y) = if js.LT(x, y) then True else False
+  gt(x, y) = if js.GT(x, y) then True else False
+  lte(x, y) = if js.LTE(x, y) then True else False
+  gte(x, y) = if js.GTE(x, y) then True else False
 
 impl Ord for Float
-  lt(x, y) = js.LT(x, y)
-  gt(x, y) = js.GT(x, y)
-  lte(x, y) = js.LTE(x, y)
-  gte(x, y) = js.GTE(x, y)
+  lt(x, y) = if js.LT(x, y) then True else False
+  gt(x, y) = if js.GT(x, y) then True else False
+  lte(x, y) = if js.LTE(x, y) then True else False
+  gte(x, y) = if js.GTE(x, y) then True else False
 
 impl Ord for String
-  lt(x, y) = js.LT(x, y)
-  gt(x, y) = js.GT(x, y)
-  lte(x, y) = js.LTE(x, y)
-  gte(x, y) = js.GTE(x, y)
+  lt(x, y) = if js.LT(x, y) then True else False
+  gt(x, y) = if js.GT(x, y) then True else False
+  lte(x, y) = if js.LTE(x, y) then True else False
+  gte(x, y) = if js.GTE(x, y) then True else False
