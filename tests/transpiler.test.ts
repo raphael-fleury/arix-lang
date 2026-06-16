@@ -1,6 +1,174 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Transpiler, transpile } from '../src/transpiler.js';
+import type { Program } from '../src/ast.js';
+import { Transpiler, transpile as transpileRaw } from '../src/transpiler.js';
 import { parse } from '../src/parser.js';
+
+const TEST_RUNTIME_PREAMBLE = `
+function createADT(name, variants) {
+  const adt = {
+    _name: name,
+    _variants: Object.keys(variants)
+  };
+
+  for (const [variantName, fields] of Object.entries(variants)) {
+    adt[variantName] = (...values) => {
+      const instance = {
+        _type: name,
+        _variant: variantName,
+        _values: values
+      };
+
+      fields.forEach((field, i) => {
+        instance[field] = values[i];
+      });
+
+      return Object.freeze(instance);
+    };
+  }
+
+  adt.match = (value, patterns) => {
+    if (!value || value._type !== name) {
+      throw new Error(\`Expected \${name}, got \${value?._type || typeof value}\`);
+    }
+
+    const variant = value._variant;
+    if (!(variant in patterns)) {
+      throw new Error(\`Unhandled variant: \${variant}\`);
+    }
+
+    const handler = patterns[variant];
+    if (typeof handler === 'function') {
+      return handler(...value._values);
+    }
+    return handler;
+  };
+
+  adt.isInstance = (value) => {
+    return value && value._type === name;
+  };
+
+  return adt;
+}
+
+const __op_toJsBool = (v) => {
+  if (v && typeof v === 'object' && v._type === 'Bool') {
+    return v._variant === 'True';
+  }
+  return Boolean(v);
+};
+
+const __op_eq = (a, b) => {
+  if (a && b && typeof a === 'object' && typeof b === 'object' && a._type === 'Bool' && b._type === 'Bool') {
+    return a._variant === b._variant;
+  }
+  return a === b;
+};
+
+const __op_notEq = (a, b) => !__op_eq(a, b);
+const __op_add = (a, b) => a + b;
+const __op_sub = (a, b) => (typeof b === 'undefined' ? -a : a - b);
+const __op_mul = (a, b) => a * b;
+const __op_div = (a, b) => a / b;
+const __op_lt = (a, b) => a < b;
+const __op_gt = (a, b) => a > b;
+const __op_lte = (a, b) => a <= b;
+const __op_gte = (a, b) => a >= b;
+const __op_and = (a, b) => __op_toJsBool(a) && __op_toJsBool(b);
+const __op_or = (a, b) => __op_toJsBool(a) || __op_toJsBool(b);
+const __op_not = (a) => !__op_toJsBool(a);
+const __op_apply = (f, x) => f(x);
+const __op_compose = (f, g) => (x) => f(g(x));
+const __op_pipe = (x, f) => f(x);
+
+const __op_append = (a, b) => {
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a + b;
+  }
+
+  const isList = (v) => v && typeof v === 'object' && v._type === 'List';
+  if (isList(a) && isList(b)) {
+    if (a._variant === 'Nil') {
+      return b;
+    }
+    return { _type: 'List', _variant: 'Cons', _values: [a.head, __op_append(a.tail, b)], head: a.head, tail: __op_append(a.tail, b) };
+  }
+
+  return String(a) + String(b);
+};
+
+const __jsBase = {
+  EQ: (a, b) => a === b,
+  NE: (a, b) => a !== b,
+  LT: (a, b) => a < b,
+  GT: (a, b) => a > b,
+  LTE: (a, b) => a <= b,
+  GTE: (a, b) => a >= b,
+  ADD: (a, b) => a + b,
+  SUB: (a, b) => a - b,
+  MUL: (a, b) => a * b,
+  DIV: (a, b) => a / b,
+  MOD: (a, b) => a % b,
+  POW: (a, b) => a ** b,
+  AND: (a, b) => a && b,
+  OR: (a, b) => a || b,
+  NOT: (a) => !a,
+  BAND: (a, b) => a & b,
+  BOR: (a, b) => a | b,
+  BXOR: (a, b) => a ^ b,
+  BNOT: (a) => ~a,
+  LSHIFT: (a, b) => a << b,
+  RSHIFT: (a, b) => a >> b,
+  URSHIFT: (a, b) => a >>> b,
+};
+
+const js = new Proxy(__jsBase, {
+  get(target, prop) {
+    if (prop in target) {
+      return target[prop];
+    }
+    return globalThis[prop];
+  }
+});
+`;
+
+const TEST_OPERATOR_FNS = new Map<string, string>([
+  ['+', '__op_add'],
+  ['-', '__op_sub'],
+  ['*', '__op_mul'],
+  ['/', '__op_div'],
+  ['==', '__op_eq'],
+  ['!=', '__op_notEq'],
+  ['<', '__op_lt'],
+  ['>', '__op_gt'],
+  ['<=', '__op_lte'],
+  ['>=', '__op_gte'],
+  ['&&', '__op_and'],
+  ['||', '__op_or'],
+  ['!', '__op_not'],
+  ['++', '__op_append'],
+  ['$', '__op_apply'],
+  ['.', '__op_compose'],
+  ['|>', '__op_pipe'],
+]);
+
+function transpile(ast: Program): string {
+  const transpiler = new Transpiler();
+  transpiler.setOperatorFns(new Map(TEST_OPERATOR_FNS));
+  const output = transpiler.transpile(ast);
+
+  const cleaned = output
+    .replace(/^import\s+.*$/gm, '')
+    .replace(/\bexport\s+(function|const)\s/g, '$1 ')
+    .replace(/export\s*\{[^}]*\};?/g, '')
+    .trim();
+
+  const needsRuntimePreamble = /\bcreateADT\b|\bjs\.|__op_/.test(cleaned);
+  if (!needsRuntimePreamble) {
+    return `${cleaned}\n`;
+  }
+
+  return `${TEST_RUNTIME_PREAMBLE}\n${cleaned}\n`;
+}
 
 function normalizeListValue(value: unknown): unknown {
   if (value && typeof value === 'object' && (value as any)._type === 'Bool') {
@@ -34,7 +202,7 @@ describe('Transpiler', () => {
     const src = [
       '@Test',
       '@Operator("**", "infixl", 7)',
-      'fn pow(a, b) = a',
+      'fn pow(a, b) = a ** b',
       'fn main() = pow._decorators.length',
     ].join('\n');
     const ast = parse(src);
@@ -596,7 +764,7 @@ describe('Transpiler', () => {
       'fn main() = show(42)',
     ].join('\n');
     const ast = parse(src);
-    const js = transpile(ast);
+    const js = transpileRaw(ast);
     expect(js).toMatch(/export \{[^}]*Show[^}]*show[^}]*\};/);
   });
 

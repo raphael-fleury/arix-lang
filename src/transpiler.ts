@@ -800,6 +800,11 @@ export class Transpiler {
         const bin = node as BinaryExpr;
         const left = this.transpileExpr(bin.left);
         const right = this.transpileExpr(bin.right);
+
+        if (bin.operator === '=') {
+          return `${left} = ${right}`;
+        }
+
         const customFn = this.operatorFns.get(bin.operator);
 
         // Custom operator declared via @Operator — dispatch to its function
