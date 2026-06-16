@@ -11,19 +11,43 @@ typeclass Ord(a)
   gte(x a, y a) -> Bool = !(lt(x, y))
 
 impl Ord for Int
-  lt(x, y) = if js.LT(x, y) then True else False
-  gt(x, y) = if js.GT(x, y) then True else False
-  lte(x, y) = if js.LTE(x, y) then True else False
-  gte(x, y) = if js.GTE(x, y) then True else False
+  lt(x, y) = match js.LT(x, y).toString():
+    "true" -> True
+    _ -> False
+  gt(x, y) = match js.GT(x, y).toString():
+    "true" -> True
+    _ -> False
+  lte(x, y) = match js.LTE(x, y).toString():
+    "true" -> True
+    _ -> False
+  gte(x, y) = match js.GTE(x, y).toString():
+    "true" -> True
+    _ -> False
 
 impl Ord for Float
-  lt(x, y) = if js.LT(x, y) then True else False
-  gt(x, y) = if js.GT(x, y) then True else False
-  lte(x, y) = if js.LTE(x, y) then True else False
-  gte(x, y) = if js.GTE(x, y) then True else False
+  lt(x, y) = match js.LT(x, y).toString():
+    "true" -> True
+    _ -> False
+  gt(x, y) = match js.GT(x, y).toString():
+    "true" -> True
+    _ -> False
+  lte(x, y) = match js.LTE(x, y).toString():
+    "true" -> True
+    _ -> False
+  gte(x, y) = match js.GTE(x, y).toString():
+    "true" -> True
+    _ -> False
 
 impl Ord for String
-  lt(x, y) = if js.LT(x, y) then True else False
-  gt(x, y) = if js.GT(x, y) then True else False
-  lte(x, y) = if js.LTE(x, y) then True else False
-  gte(x, y) = if js.GTE(x, y) then True else False
+  lt(x, y) = match js.LT(x, y).toString():
+    "true" -> True
+    _ -> False
+  gt(x, y) = match js.GT(x, y).toString():
+    "true" -> True
+    _ -> False
+  lte(x, y) = match js.LTE(x, y).toString():
+    "true" -> True
+    _ -> False
+  gte(x, y) = match js.GTE(x, y).toString():
+    "true" -> True
+    _ -> False

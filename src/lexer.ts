@@ -24,7 +24,7 @@ export interface Token {
 
 export const KEYWORDS = [
   'fn', 'let', 'mut', 'public', 'internal', 'match', 'when',
-  'import', 'type', 'typeclass', 'impl', 'for', 'if', 'then', 'else', 'async', 'await',
+  'import', 'type', 'typeclass', 'impl', 'for', 'async', 'await',
   'as', 'in', 'while',
   'where', 'return', 'break', 'continue',
 ] as const;

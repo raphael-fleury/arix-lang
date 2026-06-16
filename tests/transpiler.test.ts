@@ -391,7 +391,7 @@ describe('Transpiler', () => {
   });
 
   it('transpiles list comprehension', () => {
-    const ast = parse('fn main() = [x * 2 for x in [1, 2, 3, 4, 5] if x > 2]');
+    const ast = parse('fn main() = [x * 2 for x in [1, 2, 3, 4, 5] when x > 2]');
     const js = transpile(ast);
     const result = normalizeListValue(eval(js + '\nmain()'));
     expect(result).toEqual([6, 8, 10]);
@@ -871,10 +871,9 @@ describe('Transpiler', () => {
       '  show(x) = x.toString()',
       'impl Show for ADT',
       '  show(x) =',
-      '    if x._values.length == 0:',
-      '      x._variant',
-      '    else:',
-      '      x._variant ++ "(" ++ x._values.map((v) -> show(v)).join(", ") ++ ")"',
+      '    match x._values.length:',
+      '      0 -> x._variant',
+      '      _ -> x._variant ++ "(" ++ x._values.map((v) -> show(v)).join(", ") ++ ")"',
       'fn main() = [show({_type: "Maybe", _variant: "Some", _values: js.Array.of(3)}), show({_type: "Maybe", _variant: "None", _values: js.Array.of()})]',
     ].join('\n');
     const ast = parse(src);

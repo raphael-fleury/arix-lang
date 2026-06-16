@@ -19,7 +19,6 @@ fn showAdtValues(values) =
 
 impl Show for ADT
   show(x) =
-    if x._values.length == 0:
-      x._variant
-    else:
-      x._variant ++ "(" ++ showAdtValues(x._values) ++ ")"
+    match x._values.length:
+      0 -> x._variant
+      _ -> x._variant ++ "(" ++ showAdtValues(x._values) ++ ")"

@@ -16,7 +16,7 @@
 
 ### 2.1 Basic Syntax
 - Indentation-based (significant whitespace)
-- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `when`, `if`, `then`, `else`, `import`, `type`, `typeclass`, `impl`, `for`, `in`, `while`, `break`, `continue`, `where`, `async`, `await`, `return`, `as`, `true`, `false`
+- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `when`, `import`, `type`, `typeclass`, `impl`, `for`, `in`, `while`, `break`, `continue`, `where`, `async`, `await`, `return`, `as`, `true`, `false`
 - Comments: `# single line`, `""" multi-line """`
 
 ### 2.2 Nomenclature
@@ -113,10 +113,9 @@ let ageOrZero = maybe.getOrElse(user, 0)
 #### Result Type
 ```python
 fn divide(a, b) =
-    if b == 0:
-        Err("Division by zero")
-    else:
-        Ok(a / b)
+  match b:
+    0 -> Err("Division by zero")
+    _ -> Ok(a / b)
 
 fn main() =
     let result = divide(10, 2)
@@ -303,7 +302,7 @@ match user:
 let nums = [10, 20, 30]
 
 # List comprehension
-evens = [x for x in nums if x % 2 == 0]
+evens = [x for x in nums when x % 2 == 0]
 doubled = [x * 2 for x in nums]
 
 # Access and functions
@@ -421,10 +420,9 @@ fn display(x) where Show(x) =
 
 # Multiple constraints
 fn compareAndPrint(x, y) where Eq(x), Show(x) =
-  if eq(x, y):
-    print("Equal: " ++ show(x))
-  else:
-    print("Not equal")
+  match eq(x, y):
+    True -> print("Equal: " ++ show(x))
+    False -> print("Not equal")
 
 # Constraints with multiple type parameters
 fn convertAndStore(value) where Convertible(value, String) =
@@ -520,7 +518,7 @@ for (x, y) in pairs:
     print("${x}, ${y}")
 
 # With filtering
-for x in nums if x > 0:
+for x in nums when x > 0:
     print(x)
 ```
 
@@ -551,16 +549,17 @@ while counter < 5:
 let mut x = 0
 while true:
     x = x + 1
-    if x > 10:
-        break
+  match x > 10:
+    True -> break
+    False -> continue
 
 # With continue
 let mut x = 0
 while x < 5:
     x = x + 1
-    if x == 2:
-        continue
-    print(x)
+  match x == 2:
+    True -> continue
+    False -> print(x)
 ```
 
 #### Loop Keywords
@@ -570,15 +569,15 @@ while x < 5:
 ```python
 # Break example
 for x in [1, 2, 3, 4, 5]:
-    if x == 3:
-        break
-    print(x)  # Prints: 1, 2
+  match x:
+    3 -> break
+    _ -> print(x)  # Prints: 1, 2
 
 # Continue example
 for x in [1, 2, 3, 4, 5]:
-    if x == 2:
-        continue
-    print(x)  # Prints: 1, 3, 4, 5
+  match x:
+    2 -> continue
+    _ -> print(x)  # Prints: 1, 3, 4, 5
 ```
 
 ---
@@ -723,7 +722,7 @@ public fn fetchUser(id Int) -> Maybe(User)
 
 ## 14. Reserved Keywords
 ```
-fn, let, mut, if, then, else, match, when, import, type,
+fn, let, mut, match, when, import, type,
 public, internal, async, await, return,
 as, in, for, while, break, continue,
 true, false, where, typeclass, impl
@@ -885,8 +884,7 @@ tuplePat      ::= '(' pattern (',' pattern)* ')'
 listPat       ::= '[' pattern ('|' pattern)? ']'
 typePat       ::= ident '(' pattern (',' pattern)* ')'
 
-expr          ::= ifExpr | matchExpr | fnExpr | pipeExpr | ...
-ifExpr        ::= 'if' expr 'then' expr 'else' expr
+expr          ::= matchExpr | fnExpr | pipeExpr | ...
 matchExpr     ::= 'match' expr ':' matchArm*
 matchArm      ::= pattern ['when' expr] '->' expr
 fnExpr        ::= 'fn' params ['->' type] '=' expr

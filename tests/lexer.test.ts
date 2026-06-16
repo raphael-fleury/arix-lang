@@ -18,6 +18,15 @@ describe('Lexer', () => {
     expect(values).toEqual(['fn', 'main', '(', ')', '=', '1']);
   });
 
+  it('tokenizes if/then/else as identifiers after keyword removal', () => {
+    const tokens = tokenize('if then else');
+    const identifiers = tokens.filter(t => t.type === 'IDENTIFIER').map(t => t.value);
+    const keywords = tokens.filter(t => t.type === 'KEYWORD').map(t => t.value);
+
+    expect(identifiers).toEqual(['if', 'then', 'else']);
+    expect(keywords).toEqual([]);
+  });
+
   it('tokenizes decorators with Java-style names', () => {
     const tokens = tokenize('@Test\nfn test() = 1');
     const decorators = tokens.filter(t => t.type === 'DECORATOR').map(t => t.value);

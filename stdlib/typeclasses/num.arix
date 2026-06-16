@@ -18,8 +18,14 @@ impl Num for Int
   multiply(x, y) = js.MUL(x, y)
   divide(x, y) = js.DIV(x, y)
   negate(x) = js.NEG(x)
-  abs(x) = if x < 0 then js.NEG(x) else x
-  signum(x) = if x < 0 then js.NEG(1) else if x > 0 then js.NEG(-1) else 0
+  abs(x) = match x < 0:
+    True -> js.NEG(x)
+    False -> x
+  signum(x) = match x < 0:
+    True -> js.NEG(1)
+    False -> match x > 0:
+      True -> js.NEG(-1)
+      False -> 0
 
 impl Num for Float
   add(x, y) = js.ADD(x, y)
@@ -27,5 +33,11 @@ impl Num for Float
   multiply(x, y) = js.MUL(x, y)
   divide(x, y) = js.DIV(x, y)
   negate(x) = js.NEG(x)
-  abs(x) = if x < 0.0 then js.NEG(x) else x
-  signum(x) = if x < 0.0 then js.NEG(1.0) else if x > 0.0 then js.NEG(-1.0) else 0.0
+  abs(x) = match x < 0.0:
+    True -> js.NEG(x)
+    False -> x
+  signum(x) = match x < 0.0:
+    True -> js.NEG(1.0)
+    False -> match x > 0.0:
+      True -> js.NEG(-1.0)
+      False -> 0.0

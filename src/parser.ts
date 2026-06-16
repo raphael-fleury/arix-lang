@@ -929,9 +929,6 @@ class Parser {
       if (token.value === 'fn') {
         return this.parseFunctionExpr();
       }
-      if (token.value === 'if') {
-        return this.parseIf();
-      }
       if (token.value === 'match') {
         return this.parseMatch();
       }
@@ -1058,7 +1055,7 @@ class Parser {
       return true;
     }
     if (token.type === 'KEYWORD') {
-      return token.value === 'if' || token.value === 'match' || token.value === 'fn' || token.value === 'None' || token.value === 'await';
+      return token.value === 'match' || token.value === 'fn' || token.value === 'None' || token.value === 'await';
     }
     return token.value === '(' || token.value === '[' || token.value === '{';
   }
@@ -1218,7 +1215,7 @@ class Parser {
     const iterable = this.parseExpr();
     
     let condition: Node | undefined;
-    if (this.current().value === 'if') {
+    if (this.current().value === 'when') {
       this.advance();
       condition = this.parseExpr();
     }
@@ -1284,7 +1281,7 @@ class Parser {
     // Parse first element
     const firstElement = this.parseExpr();
 
-    // Check for list comprehension: [expr for pattern in iterable if condition?]
+    // Check for list comprehension: [expr for pattern in iterable when condition?]
     if (this.current().value === 'for') {
       return this.parseListComprehension(firstElement);
     }
@@ -1324,7 +1321,7 @@ class Parser {
     const iterable = this.parseExpr();
 
     let condition: Node | undefined;
-    if (this.current().value === 'if') {
+    if (this.current().value === 'when') {
       this.advance();
       condition = this.parseExpr();
     }

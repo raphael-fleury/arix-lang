@@ -189,7 +189,7 @@ describe('Parser', () => {
   });
 
   it('parses for loops with filtering', () => {
-    const ast = parse('for x in nums if x > 0:\n    print(x)');
+    const ast = parse('for x in nums when x > 0:\n    print(x)');
     expect(ast.body[0].type).toBe('ForExpr');
   });
 
@@ -202,8 +202,7 @@ describe('Parser', () => {
   it('parses break statements in for loops', () => {
     const src = [
       'for x in [1, 2, 3, 4, 5]:',
-      '    if x == 3:',
-      '        break',
+      '    break',
     ].join('\n');
     const ast = parse(src);
     expect(ast.body[0].type).toBe('ForExpr');
@@ -212,8 +211,7 @@ describe('Parser', () => {
   it('parses continue statements in for loops', () => {
     const src = [
       'for x in [1, 2, 3, 4, 5]:',
-      '    if x == 2:',
-      '        continue',
+      '    continue',
     ].join('\n');
     const ast = parse(src);
     expect(ast.body[0].type).toBe('ForExpr');
@@ -237,7 +235,7 @@ describe('Parser', () => {
   });
 
   it('parses list comprehensions with condition', () => {
-    const ast = parse('[x for x in nums if x % 2 == 0]');
+    const ast = parse('[x for x in nums when x % 2 == 0]');
     expect(ast.body[0].type).toBe('ListComprehension');
     const comp = ast.body[0] as any;
     expect(comp.condition).toBeDefined();
@@ -421,11 +419,16 @@ describe('Parser', () => {
     expect(inst.methods.length).toBe(2);
   });
 
-  it('parses instance methods after inline if expression bodies', () => {
+  it('parses instance methods after nested match expression bodies', () => {
     const src = [
       'impl Num for Int',
-      '  abs(x) = if x < 0 then -x else x',
-      '  signum(x) = if x < 0 then -1 else if x > 0 then 1 else 0',
+      '  abs(x) = match x < 0:',
+      '    true -> -x',
+      '    false -> x',
+      '  signum(x) = match x:',
+      '    n when n < 0 -> -1',
+      '    n when n > 0 -> 1',
+      '    _ -> 0',
     ].join('\n');
     const ast = parse(src);
     const inst = ast.body[0] as any;
