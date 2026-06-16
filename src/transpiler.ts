@@ -1447,6 +1447,17 @@ export class Transpiler {
     this.declareName(node.name);
     this.exports.push(node.name);
     const typeclassMethodNames = node.methods.map(method => method.name);
+
+    // Register @Operator decorators declared on typeclass methods (symbol -> method name).
+    for (const method of node.methods) {
+      const operatorDec = method.decorators?.find(d => d.name === 'Operator');
+      if (operatorDec && operatorDec.args.length >= 1) {
+        const symNode = operatorDec.args[0];
+        if (symNode.type === 'StringLiteral') {
+          this.operatorFns.set((symNode as any).value as string, method.name);
+        }
+      }
+    }
     
     // Generate default implementations for methods with bodies
     for (const method of node.methods) {

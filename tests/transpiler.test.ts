@@ -536,6 +536,19 @@ describe('Transpiler', () => {
     expect(result.show).toBeNull();
   });
 
+  it('registers @Operator from typeclass methods', () => {
+    const src = [
+      'typeclass Eq(a)',
+      '  @Operator("==", "infix", 4)',
+      '  eq(x a, y a) -> Bool',
+      'fn main() = 1 == 1',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+
+    expect(js).toContain('eq(1, 1)');
+  });
+
   it('applies decorators on typeclass default methods', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
