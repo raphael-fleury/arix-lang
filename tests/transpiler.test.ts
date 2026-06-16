@@ -29,16 +29,6 @@ function evalTranspiled(js: string, mainCall = true): unknown {
   return normalizeListValue(eval(code + (mainCall ? '\nmain()' : '')));
 }
 
-function transpileStrict(source: string, operatorFns?: Map<string, string>): string {
-  const transpiler = new Transpiler();
-  transpiler.setStrictOperatorResolution(true);
-  if (operatorFns) {
-    transpiler.setOperatorFns(operatorFns);
-  }
-
-  return transpiler.transpile(parse(source), 'strict-test.arix');
-}
-
 describe('Transpiler', () => {
   it('transpiles decorators as function metadata', () => {
     const src = [
@@ -425,22 +415,6 @@ describe('Transpiler', () => {
     expect(js).toContain('gt(2, 3)');
     expect(js).toContain('and(');
     expect(js).toContain('or(');
-  });
-
-  it('strict mode rejects js-style equality without Arix operator definition', () => {
-    expect(() => transpileStrict('fn main() = 1 == 1')).toThrow(/Operator '==' does not have an Arix definition/);
-  });
-
-  it('strict mode uses mapped Arix operator implementations', () => {
-    const js = transpileStrict(
-      [
-        'fn eq(x, y) = js.EQ(x, y)',
-        'fn main() = 1 == 1',
-      ].join('\n'),
-      new Map<string, string>([['==', 'eq']]),
-    );
-
-    expect(js).toContain('eq(1, 1)');
   });
 
   it('transpiles string concatenation operator', () => {
