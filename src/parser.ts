@@ -1793,10 +1793,3 @@ export function parse(source: string, externalOperators?: Map<string, OperatorIn
   if (externalOperators) parser.setCustomOperators(externalOperators);
   return parser.parse(source);
 }
-
-/** Extract all @Operator declarations from source without needing the full AST. */
-export function extractOperators(source: string): Map<string, OperatorInfo> {
-  const parser = new Parser();
-  parser.parse(source);
-  return parser.getCustomOperators();
-}

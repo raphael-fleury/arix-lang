@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { parse, extractOperators, OperatorInfo } from './parser.js';
+import { parse, OperatorInfo } from './parser.js';
 import { Transpiler } from './transpiler.js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join, dirname, relative, basename } from 'node:path';

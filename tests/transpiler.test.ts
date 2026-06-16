@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { transpile } from '../src/transpiler.js';
+import { Transpiler, transpile } from '../src/transpiler.js';
 import { parse } from '../src/parser.js';
 
 function normalizeListValue(value: unknown): unknown {
@@ -27,6 +27,16 @@ function normalizeListValue(value: unknown): unknown {
 function evalTranspiled(js: string, mainCall = true): unknown {
   const code = js.replace(/export\s*\{[^}]*\};?/g, '');
   return normalizeListValue(eval(code + (mainCall ? '\nmain()' : '')));
+}
+
+function transpileStrict(source: string, operatorFns?: Map<string, string>): string {
+  const transpiler = new Transpiler();
+  transpiler.setStrictOperatorResolution(true);
+  if (operatorFns) {
+    transpiler.setOperatorFns(operatorFns);
+  }
+
+  return transpiler.transpile(parse(source), 'strict-test.arix');
 }
 
 describe('Transpiler', () => {
@@ -400,17 +410,46 @@ describe('Transpiler', () => {
   });
 
   it('transpiles binary operators', () => {
-    const ast = parse('fn main() = (5 == 5) && (3 != 4) || (2 > 3)');
-    const js = transpile(ast);
-    const result = normalizeListValue(eval(js + '\nmain()'));
-    expect(result).toBe(true);
+    const transpiler = new Transpiler();
+    transpiler.setOperatorFns(new Map<string, string>([
+      ['==', 'eq'],
+      ['!=', 'notEq'],
+      ['>', 'gt'],
+      ['&&', 'and'],
+      ['||', 'or'],
+    ]));
+    const js = transpiler.transpile(parse('fn main() = (5 == 5) && (3 != 4) || (2 > 3)'), 'binary-ops-test.arix');
+
+    expect(js).toContain('eq(5, 5)');
+    expect(js).toContain('notEq(3, 4)');
+    expect(js).toContain('gt(2, 3)');
+    expect(js).toContain('and(');
+    expect(js).toContain('or(');
+  });
+
+  it('strict mode rejects js-style equality without Arix operator definition', () => {
+    expect(() => transpileStrict('fn main() = 1 == 1')).toThrow(/Operator '==' does not have an Arix definition/);
+  });
+
+  it('strict mode uses mapped Arix operator implementations', () => {
+    const js = transpileStrict(
+      [
+        'fn eq(x, y) = js.EQ(x, y)',
+        'fn main() = 1 == 1',
+      ].join('\n'),
+      new Map<string, string>([['==', 'eq']]),
+    );
+
+    expect(js).toContain('eq(1, 1)');
   });
 
   it('transpiles string concatenation operator', () => {
-    const ast = parse('fn main() = "Hello" ++ " " ++ "World"');
-    const js = transpile(ast);
-    const result = eval(js + '\nmain()');
-    expect(result).toBe('Hello World');
+    const transpiler = new Transpiler();
+    transpiler.setOperatorFns(new Map<string, string>([['++', 'append']]));
+    const js = transpiler.transpile(parse('fn main() = "Hello" ++ " " ++ "World"'), 'concat-ops-test.arix');
+
+    expect(js).toContain('append("Hello", " ")');
+    expect(js).toContain('append(append("Hello", " "), "World")');
   });
 
   it('transpiles custom ADT type declaration', () => {

@@ -46,7 +46,6 @@ const RUNTIME_IMPORT = (relativePath: string) =>
 
 const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid', 'prelude'];
 const JS_NAMESPACE = 'js';
-
 interface GlobalInstanceInfo {
   typeclass: string;
   forTypes: string[];
@@ -660,6 +659,9 @@ export class Transpiler {
     const moduleName = this.getModuleName(node.module);
     const sanitizedAlias = this.sanitizeModuleName(node.alias || moduleName);
     
+    // Register the module namespace for cross-module typeclass dispatch
+    this.moduleNamespaces.set(node.module, sanitizedAlias);
+    
     if (node.items && node.items.length > 0) {
       node.items.forEach(item => this.assertNotReservedIdentifier(item));
       const itemsStr = node.items.join(', ');
@@ -755,8 +757,8 @@ export class Transpiler {
   }
 
   private sanitizeModuleName(moduleName: string): string {
-    // Replace hyphens and other non-identifier characters with underscores
-    return moduleName.replace(/[-\s.]/g, '_');
+    // Replace hyphens, slashes, dots, and other non-identifier characters with underscores
+    return moduleName.replace(/[-\s./\\]/g, '_');
   }
 
   private moduleToJsPath(module: string, isRelative: boolean): string {
@@ -798,43 +800,14 @@ export class Transpiler {
         const bin = node as BinaryExpr;
         const left = this.transpileExpr(bin.left);
         const right = this.transpileExpr(bin.right);
-
-        if (bin.operator === '$') {
-          return `${left}(${right})`;
-        }
-        if (bin.operator === '.') {
-          return `((..._args) => ${left}(${right}(..._args)))`;
-        }
-        
-        if (bin.operator === '||') {
-          this.needsBoolHelpers = true;
-          return `(__boolToJs(${left}) ? __boolTrue() : __boolFromJs(${right}))`;
-        }
-        if (bin.operator === '&&') {
-          this.needsBoolHelpers = true;
-          return `(__boolToJs(${left}) ? __boolFromJs(${right}) : __boolFalse())`;
-        }
-        if (bin.operator === '==') {
-          this.needsBoolHelpers = true;
-          return `__valueEq(${left}, ${right})`;
-        }
-        if (bin.operator === '!=') {
-          this.needsBoolHelpers = true;
-          return `__valueNe(${left}, ${right})`;
-        }
-        if (bin.operator === '<' || bin.operator === '>' || bin.operator === '<=' || bin.operator === '>=') {
-          this.needsBoolHelpers = true;
-          return `__boolFromJs(${left} ${bin.operator} ${right})`;
-        }
-        if (bin.operator === '++') {
-          return `(${left} + ${right})`;
-        }
-        // Custom operator declared via @Operator — dispatch to its function
         const customFn = this.operatorFns.get(bin.operator);
+
+        // Custom operator declared via @Operator — dispatch to its function
         if (customFn) {
           return `${customFn}(${left}, ${right})`;
         }
-        return `(${left} ${bin.operator} ${right})`;
+
+        this.throwUndefinedOperatorError(bin.operator, bin, 'binary');
       }
       
       case 'UnaryExpr': {
@@ -844,11 +817,8 @@ export class Transpiler {
         if (customFn) {
           return `${customFn}(${operand})`;
         }
-        if (unary.operator === '!') {
-          this.needsBoolHelpers = true;
-          return `__boolNot(${operand})`;
-        }
-        return `${unary.operator}${operand}`;
+
+        this.throwUndefinedOperatorError(unary.operator, unary, 'unary');
       }
       
       case 'IndexExpr': {
@@ -1361,6 +1331,16 @@ export class Transpiler {
     if (name === JS_NAMESPACE) {
       throw new Error(`'${JS_NAMESPACE}' is a reserved namespace for JavaScript interop and cannot be declared or imported.`);
     }
+  }
+
+  private throwUndefinedOperatorError(operator: string, node: Node, kind: 'binary' | 'unary'): never {
+    const line = node.line ?? 1;
+    const column = node.column ?? 1;
+    const location = this.currentFilePath ? `${this.currentFilePath}:${line}:${column}` : `${line}:${column}`;
+    throw new Error(
+      `${location} Operator '${operator}' does not have an Arix definition for ${kind} usage. ` +
+      `Declare it with @Operator(...) or import a module that defines it.`
+    );
   }
 
   private collectPatternBindings(pattern: Pattern): string[] {
