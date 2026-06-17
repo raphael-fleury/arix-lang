@@ -22,6 +22,12 @@ impl Ord for Float
   lte(x, y) = runtime.BOOL(runtime.LTE(x, y))
   gte(x, y) = runtime.BOOL(runtime.GTE(x, y))
 
+impl Ord for Char
+  lt(x, y) = runtime.BOOL(runtime.LT(x, y))
+  gt(x, y) = runtime.BOOL(runtime.GT(x, y))
+  lte(x, y) = runtime.BOOL(runtime.LTE(x, y))
+  gte(x, y) = runtime.BOOL(runtime.GTE(x, y))
+
 impl Ord for String
   lt(x, y) = runtime.BOOL(runtime.LT(x, y))
   gt(x, y) = runtime.BOOL(runtime.GT(x, y))

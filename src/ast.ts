@@ -2,6 +2,7 @@ export type NodeType =
   | 'Program'
   | 'NumberLiteral'
   | 'StringLiteral'
+  | 'CharLiteral'
   | 'StringInterpolation'
   | 'BooleanLiteral'
   | 'NoneLiteral'
@@ -62,6 +63,11 @@ export interface NumberLiteral extends Node {
 
 export interface StringLiteral extends Node {
   type: 'StringLiteral';
+  value: string;
+}
+
+export interface CharLiteral extends Node {
+  type: 'CharLiteral';
   value: string;
 }
 

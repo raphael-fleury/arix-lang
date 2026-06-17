@@ -19,6 +19,9 @@ impl Eq for Float
 impl Eq for String
   eq(x, y) = runtime.BOOL(runtime.EQ(x, y))
 
+impl Eq for Char
+  eq(x, y) = runtime.BOOL(runtime.EQ(x, y))
+
 impl Eq for Bool
   eq(x, y) =
     match x:

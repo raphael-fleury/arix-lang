@@ -3,6 +3,7 @@ import type {
   Program,
   NumberLiteral,
   StringLiteral,
+  CharLiteral,
   BooleanLiteral,
   NoneLiteral,
   Identifier,
@@ -810,6 +811,10 @@ export class Transpiler {
       case 'StringLiteral':
         const str = (node as StringLiteral).value.replace(/"/g, '\\"');
         return `"${str}"`;
+
+      case 'CharLiteral':
+        const charVal = (node as any).value;
+        return `"${charVal.replace(/"/g, '\\"')}"`;
       
       case 'BooleanLiteral':
         this.needsBoolHelpers = true;
@@ -1848,6 +1853,8 @@ export class Transpiler {
         return `typeof ${valueRef} === "string"`;
       case 'Boolean':
         return `(${valueRef} && ${valueRef}._type === 'Bool') || typeof ${valueRef} === "boolean"`;
+      case 'Char':
+        return `typeof ${valueRef} === "string" && ${valueRef}.length === 1`;
       case 'Bool':
         return `${valueRef} && ${valueRef}._type === 'Bool'`;
       case 'Float':

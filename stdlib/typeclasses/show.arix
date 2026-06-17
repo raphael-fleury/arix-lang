@@ -14,6 +14,9 @@ impl Show for Float
 impl Show for String
   show(x) = x
 
+impl Show for Char
+  show(x) = x
+
 fn showAdtValues(values) =
   values.map((v) -> show(v)).join(", ")
 

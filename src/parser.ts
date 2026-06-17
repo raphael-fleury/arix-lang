@@ -4,6 +4,7 @@ import type {
   Program,
   NumberLiteral,
   StringLiteral,
+  CharLiteral,
   StringInterpolation,
   StringPart,
   ExprPart,
@@ -953,6 +954,11 @@ class Parser {
     if (token.type === 'STRING') {
       this.advance();
       return { type: 'StringLiteral', value: token.value } as StringLiteral;
+    }
+
+    if (token.type === 'CHAR') {
+      this.advance();
+      return { type: 'CharLiteral', value: token.value } as CharLiteral;
     }
 
     if (token.type === 'INTERPOLATED_STRING') {

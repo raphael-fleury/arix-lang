@@ -1,6 +1,7 @@
 export type TokenType =
   | 'NUMBER'
   | 'STRING'
+  | 'CHAR'
   | 'INTERPOLATED_STRING'
   | 'DECORATOR'
   | 'IDENTIFIER'
@@ -171,6 +172,59 @@ export function tokenize(source: string): Token[] {
     if (/\s/.test(char)) {
       column++;
       pos++;
+      continue;
+    }
+
+    // Char literals (single-quoted)
+    if (char === "'") {
+      const charStartCol = column;
+      pos++;
+      column++;
+      let charValue = '';
+      let escaped = false;
+      
+      while (pos < source.length) {
+        if (source[pos] === '\\' && !escaped && pos + 1 < source.length) {
+          escaped = true;
+          charValue += source[pos];
+          pos++;
+          column++;
+        } else if (source[pos] === "'" && !escaped) {
+          break;
+        } else {
+          charValue += source[pos];
+          pos++;
+          column++;
+          escaped = false;
+        }
+      }
+      
+      if (pos >= source.length) {
+        tokens.push({
+          type: 'ERROR',
+          value: charValue,
+          line,
+          column: charStartCol,
+          message: `Unterminated char literal at ${line}:${charStartCol}`,
+        });
+        break;
+      }
+      
+      const processedChar = processEscapeSequences(charValue);
+      if (processedChar.length !== 1) {
+        tokens.push({
+          type: 'ERROR',
+          value: charValue,
+          line,
+          column: charStartCol,
+          message: `Char literal must contain exactly one character, got ${processedChar.length}`,
+        });
+      } else {
+        tokens.push({ type: 'CHAR', value: processedChar, line, column: charStartCol });
+      }
+      
+      pos++;
+      column++;
       continue;
     }
 

@@ -1248,6 +1248,9 @@ export class TypeChecker {
     if (node.type === 'StringLiteral') {
       return { kind: 'name', name: 'String', args: [] };
     }
+    if (node.type === 'CharLiteral') {
+      return { kind: 'name', name: 'Char', args: [] };
+    }
     if (node.type === 'BooleanLiteral') {
       return { kind: 'name', name: 'Bool', args: [] };
     }
