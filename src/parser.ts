@@ -908,7 +908,8 @@ class Parser {
 
     if (token.type === 'NUMBER') {
       this.advance();
-      return { type: 'NumberLiteral', value: parseFloat(token.value) } as NumberLiteral;
+      const isFloat = token.value.includes('.') || token.value.includes('e') || token.value.includes('E');
+      return { type: 'NumberLiteral', value: parseFloat(token.value), isFloat } as NumberLiteral;
     }
 
     if (token.type === 'STRING') {

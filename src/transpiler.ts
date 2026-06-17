@@ -81,6 +81,7 @@ export class Transpiler {
   private needsDecoratorHelpers = false;
   private scopeStack: Set<string>[] = [];
   private operatorFns: Map<string, string> = new Map(); // symbol → fn name
+  private nativePrimitives = false;
 
   setOutputDir(dir: string): void {
     this.outputDir = dir;
@@ -94,6 +95,10 @@ export class Transpiler {
     for (const [sym, fn] of ops) {
       this.operatorFns.set(sym, fn);
     }
+  }
+
+  setNativePrimitives(enabled: boolean): void {
+    this.nativePrimitives = enabled;
   }
 
   transpile(ast: Program, filePath: string = ''): string {
@@ -115,6 +120,13 @@ export class Transpiler {
     this.needsDecoratorHelpers = false;
     // NOTE: Don't reset operatorFns here - it's set by setOperatorFns() and should be preserved
     this.scopeStack = [new Set()];
+
+    if (this.nativePrimitives) {
+      this.runtimeImports.add('__arixInt');
+      this.runtimeImports.add('__arixFloat');
+      this.runtimeImports.add('__arixIsInt');
+      this.runtimeImports.add('__arixIsFloat');
+    }
 
     const explicitImports = ast.body.filter((node): node is ImportStmt => node.type === 'ImportStmt');
     const implicitStdlibImports = this.getImplicitStdlibImports(explicitImports);
@@ -778,6 +790,12 @@ export class Transpiler {
     }
     switch (node.type) {
       case 'NumberLiteral':
+        if (this.nativePrimitives) {
+          const numNode = node as NumberLiteral;
+          const isFloat = numNode.isFloat === true;
+          const value = String(numNode.value);
+          return isFloat ? `__arixFloat(${value})` : `__arixInt(${value})`;
+        }
         return String((node as NumberLiteral).value);
       
       case 'StringLiteral':
@@ -1803,6 +1821,9 @@ export class Transpiler {
       case 'ADT':
         return `${valueRef} && typeof ${valueRef} === "object" && typeof ${valueRef}._type === "string" && typeof ${valueRef}._variant === "string"`;
       case 'Int':
+        if (this.nativePrimitives) {
+          return `__arixIsInt(${valueRef})`;
+        }
         return `Number.isInteger(${valueRef})`;
       case 'String':
         return `typeof ${valueRef} === "string"`;
@@ -1811,6 +1832,9 @@ export class Transpiler {
       case 'Bool':
         return `${valueRef} && ${valueRef}._type === 'Bool'`;
       case 'Float':
+        if (this.nativePrimitives) {
+          return `__arixIsFloat(${valueRef})`;
+        }
         return `typeof ${valueRef} === "number" && !Number.isInteger(${valueRef})`;
       case 'List':
         return `${valueRef} && ${valueRef}._type === 'List'`;

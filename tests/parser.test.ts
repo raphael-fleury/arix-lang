@@ -41,6 +41,20 @@ describe('Parser', () => {
     expect(ast.body[0].type).toBe('LetDecl');
   });
 
+  it('tracks numeric literal kind as int or float', () => {
+    const ast = parse('let a = 1\nlet b = 1.0\nlet c = 3.14');
+    const a = (ast.body[0] as any).value;
+    const b = (ast.body[1] as any).value;
+    const c = (ast.body[2] as any).value;
+
+    expect(a.type).toBe('NumberLiteral');
+    expect(a.isFloat).toBe(false);
+    expect(b.type).toBe('NumberLiteral');
+    expect(b.isFloat).toBe(true);
+    expect(c.type).toBe('NumberLiteral');
+    expect(c.isFloat).toBe(true);
+  });
+
   it('parses match expression with when', () => {
     const ast = parse('match x: n when n > 5 -> 1 _ -> 0');
     expect(ast.body[0].type).toBe('MatchExpr');

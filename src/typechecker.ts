@@ -11,6 +11,7 @@ import type {
   MemberExpr,
   MethodDecl,
   Node,
+  NumberLiteral,
   Param,
   Pattern,
   Program,
@@ -1241,7 +1242,8 @@ export class TypeChecker {
     }
 
     if (node.type === 'NumberLiteral') {
-      return { kind: 'name', name: 'Int', args: [] };
+      const isFloat = (node as NumberLiteral).isFloat === true;
+      return { kind: 'name', name: isFloat ? 'Float' : 'Int', args: [] };
     }
     if (node.type === 'StringLiteral') {
       return { kind: 'name', name: 'String', args: [] };

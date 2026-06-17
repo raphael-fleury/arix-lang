@@ -253,6 +253,18 @@ describe('Transpiler', () => {
     expect(result).toBe(3);
   });
 
+  it('lowers numeric literals to native wrappers when enabled', () => {
+    const ast = parse('fn main() = (1, 1.5)');
+    const transpiler = new Transpiler();
+    transpiler.setOperatorFns(new Map(TEST_OPERATOR_FNS));
+    transpiler.setNativePrimitives(true);
+    const js = transpiler.transpile(ast);
+
+    expect(js).toContain('__arixInt(1)');
+    expect(js).toContain('__arixFloat(1.5)');
+    expect(js).toContain("import { __arixFloat, __arixInt, __arixIsFloat, __arixIsInt } from './arix-runtime.js';");
+  });
+
   it('transpiles function call', () => {
     const src = [
       'fn double(x) = x * 2',

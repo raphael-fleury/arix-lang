@@ -18,6 +18,7 @@ const STD_LIB_DIR = join(__dirname, '..', 'stdlib');
 const STD_LIB_TYPECLASSES_DIR = join(STD_LIB_DIR, 'typeclasses');
 const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid', 'prelude'];
 const STDLIB_TYPECLASS_MODULES = new Set(['eq', 'ord', 'num', 'show', 'functor', 'applicative', 'monad', 'monoid']);
+const NATIVE_PRIMITIVES = process.argv.includes('--native-primitives') || process.env.ARIX_NATIVE_PRIMITIVES === '1';
 
 function getStdlibModulePath(moduleName: string): string {
   if (STDLIB_TYPECLASS_MODULES.has(moduleName)) {
@@ -103,6 +104,7 @@ Usage:
   arix check <file>     Run semantic/type checks only
   arix init <name>      Create a new Arix project
   arix <file.arix>      Compile and run (shortcut)
+  --native-primitives   Enable native Int/Float wrappers during transpilation
 
 Examples:
   arix run hello.arix
@@ -578,6 +580,7 @@ function compileWithDeps(entryFile: string, outputDir: string, autoRunMain = fal
     transpiler.setGlobalInstances(context.globalInstances);
     transpiler.setOutputDir(outputFileDir);
     transpiler.setAutoRunMain(autoRunMain && isMain);
+    transpiler.setNativePrimitives(NATIVE_PRIMITIVES);
     // Set all global operators, not just the local ones
     if (globalOperatorFns.size > 0) {
       if (process.env.DEBUG) console.log(`Setting operator functions: ${Array.from(globalOperatorFns.keys()).join(', ')}`);

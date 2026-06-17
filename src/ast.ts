@@ -56,6 +56,7 @@ export interface Program extends Node {
 export interface NumberLiteral extends Node {
   type: 'NumberLiteral';
   value: number;
+  isFloat?: boolean;
 }
 
 export interface StringLiteral extends Node {

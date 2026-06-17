@@ -168,6 +168,21 @@ describe('TypeChecker', () => {
     expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(false);
   });
 
+  it('infers decimal literals as Float in constrained calls', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Render(a)',
+        '  render(x a) -> String',
+        'impl Render for Float',
+        '  render(x) = "ok"',
+        'fn useRender(x a) where Render(a) = render(x)',
+        'fn main() = useRender(1.5)',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(false);
+  });
+
   it('validates unknown type variables in type declaration where constraints', () => {
     const diagnostics = runCheck(
       [

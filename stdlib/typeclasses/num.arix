@@ -16,15 +16,15 @@ impl Num for Int
   add(x, y) = js.ADD(x, y)
   subtract(x, y) = js.SUB(x, y)
   multiply(x, y) = js.MUL(x, y)
-  divide(x, y) = js.DIV(x, y)
+  divide(x, y) = js.DIV_INT(x, y)
   negate(x) = js.NEG(x)
   abs(x) = match x < 0:
     True -> js.NEG(x)
     False -> x
   signum(x) = match x < 0:
-    True -> js.NEG(1)
+    True -> -1
     False -> match x > 0:
-      True -> js.NEG(-1)
+      True -> 1
       False -> 0
 
 impl Num for Float
@@ -37,7 +37,7 @@ impl Num for Float
     True -> js.NEG(x)
     False -> x
   signum(x) = match x < 0.0:
-    True -> js.NEG(1.0)
+    True -> -1.0
     False -> match x > 0.0:
-      True -> js.NEG(-1.0)
+      True -> 1.0
       False -> 0.0
