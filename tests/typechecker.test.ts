@@ -46,7 +46,7 @@ describe('TypeChecker', () => {
   it('reports non-exhaustive match for typed ADT values', () => {
     const diagnostics = runCheck(
       [
-        'type Status = Active | Inactive',
+        'enum Status = Active, Inactive',
         'fn describe(s Status) = match s: Active -> "active"',
       ].join('\n'),
     );
@@ -57,7 +57,7 @@ describe('TypeChecker', () => {
   it('accepts exhaustive match', () => {
     const diagnostics = runCheck(
       [
-        'type Status = Active | Inactive',
+        'enum Status = Active, Inactive',
         'fn describe(s Status) = match s: Active -> "active" Inactive -> "inactive"',
       ].join('\n'),
     );
@@ -68,7 +68,7 @@ describe('TypeChecker', () => {
   it('accepts exhaustive List match with [] and [head | rest]', () => {
     const diagnostics = runCheck(
       [
-        'type List(a) = Nil | Cons(head: a, tail: List(a))',
+        'enum List(a) = Nil, Cons(head: a, tail: List(a))',
         'fn reduce(acc, f, list List(Int)) =',
         '  match list:',
         '    [] -> acc',
@@ -82,7 +82,7 @@ describe('TypeChecker', () => {
   it('reports non-exhaustive List match when only [] arm exists', () => {
     const diagnostics = runCheck(
       [
-        'type List(a) = Nil | Cons(head: a, tail: List(a))',
+        'enum List(a) = Nil, Cons(head: a, tail: List(a))',
         'fn onlyNil(list List(Int)) =',
         '  match list:',
         '    [] -> 0',
@@ -188,7 +188,7 @@ describe('TypeChecker', () => {
       [
         'typeclass Show(a)',
         '  show(x a) -> String',
-        'type Box(a) = Box(value: a) where Show(b)',
+        'enum Box(a) = Box(value: a) where Show(b)',
       ].join('\n'),
     );
 
@@ -200,7 +200,7 @@ describe('TypeChecker', () => {
       [
         'typeclass Show(a)',
         '  show(x a) -> String',
-        'type Box(a) = Box(value: a) where Show(a)',
+        'enum Box(a) = Box(value: a) where Show(a)',
       ].join('\n'),
     );
 
@@ -213,7 +213,7 @@ describe('TypeChecker', () => {
       [
         'typeclass Show(a)',
         '  show(x a) -> String',
-        'type Box(a) = Box(value: a) where Show(a)',
+        'enum Box(a) = Box(value: a) where Show(a)',
         'let foo = Box(42)',
       ].join('\n'),
     );
@@ -228,7 +228,7 @@ describe('TypeChecker', () => {
         '  show(x a) -> String',
         'impl Show for Int',
         '  show(x) = x.toString()',
-        'type Box(a) = Box(value: a) where Show(a)',
+        'enum Box(a) = Box(value: a) where Show(a)',
         'let foo = Box(42)',
       ].join('\n'),
     );

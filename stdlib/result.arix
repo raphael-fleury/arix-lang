@@ -4,7 +4,7 @@ import applicative(Applicative)
 import monad(Monad)
 import bool(True, False)
 
-type Result(a, e) = Ok(value: a) | Err(error: e)
+enum Result(a, e) = Ok(value: a), Err(error: e)
 
 public fn getOrElse(result, defaultValue) =
     match result:

@@ -366,7 +366,7 @@ describe('Transpiler', () => {
 
   it('transpiles bare nullary constructors', () => {
     const src = [
-      'type Flag = On | Off',
+      'enum Flag = On, Off',
       'fn main() = On',
     ].join('\n');
     const ast = parse(src);
@@ -631,7 +631,7 @@ describe('Transpiler', () => {
 
   it('transpiles custom ADT type declaration', () => {
     const src = [
-      'type Status = Active | Inactive',
+      'enum Status = Active, Inactive',
       'fn main() = Status',
     ].join('\n');
     const ast = parse(src);
@@ -644,7 +644,7 @@ describe('Transpiler', () => {
 
   it('transpiles ADT with fields', () => {
     const src = [
-      'type UserStatus = Active(id) | Inactive(id, reason)',
+      'enum UserStatus = Active(id), Inactive(id, reason)',
       'fn main() = UserStatus',
     ].join('\n');
     const ast = parse(src);
@@ -671,7 +671,7 @@ describe('Transpiler', () => {
 
   it('transpiles custom ADT instantiation and pattern matching', () => {
     const src = [
-      'type Status = Active | Inactive',
+      'enum Status = Active, Inactive',
       'fn createStatus() = Status.Active',
     ].join('\n');
     const ast = parse(src);

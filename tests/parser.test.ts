@@ -130,8 +130,8 @@ describe('Parser', () => {
     expect(typeDecl.recordFields[1].default?.value).toBe(18);
   });
 
-  it('parses type declaration with where constraints', () => {
-    const ast = parse('type List(a) = Nil | Cons(head: a, tail: List(a)) where Show(a)');
+  it('parses enum declaration with where constraints', () => {
+    const ast = parse('enum List(a) = Nil, Cons(head: a, tail: List(a)) where Show(a)');
     const typeDecl = ast.body[0] as any;
 
     expect(typeDecl.type).toBe('TypeDecl');

@@ -203,6 +203,11 @@ class Parser {
             throw new Error('Decorators are currently only supported on function declarations');
           }
           return this.parseTypeDecl();
+        case 'enum':
+          if (decorators.length > 0) {
+            throw new Error('Decorators are currently only supported on function declarations');
+          }
+          return this.parseEnumDecl();
         case 'typeclass':
           if (decorators.length > 0) {
             throw new Error('Decorators are currently only supported on function declarations');
@@ -599,77 +604,104 @@ class Parser {
 
     if (this.current().value === '=') {
       this.advance();
-      let isRecord = false;
-      const recordFields: { name: string; fieldType: Node; default?: Node }[] = [];
-
-      if (this.current().value === '{') {
-        isRecord = true;
-        this.advance();
-        while (this.current().value !== '}') {
-          const fieldName = this.expect('IDENTIFIER').value;
-          let fieldType = this.parseType();
-          let defaultValue: Node | undefined;
-
-          if (this.current().value === '??') {
-            this.advance();
-            defaultValue = this.parseExpr();
-          }
-
-          recordFields.push({ name: fieldName, fieldType, default: defaultValue });
-          if (this.current().value === ',') this.advance();
-        }
-        this.expect('PUNCTUATION', '}');
-
-        if (this.current().value === 'where') {
-          this.advance();
-          constraints = this.parseConstraints();
-        }
-      } else {
-        while (this.current().type !== 'NEWLINE' && this.current().type !== 'EOF' && this.current().value !== 'where') {
-          const variantName = this.expect('IDENTIFIER').value;
-          const fields: { name: string; fieldType: Node }[] = [];
-
-          if (this.current().value === '(') {
-            this.advance();
-            while (this.current().value !== ')') {
-              let fieldName = '';
-              let fieldType: Node = { type: 'Identifier', name: 'any' } as Identifier;
-              
-              if (this.current().type === 'IDENTIFIER') {
-                const firstIdent = this.expect('IDENTIFIER').value;
-                if (this.current().value === ':') {
-                  this.advance();
-                  fieldName = firstIdent;
-                  if (this.current().value !== ')' && this.current().value !== ',') {
-                    fieldType = this.parseType();
-                  }
-                } else {
-                  fieldName = firstIdent;
-                  if (this.current().value !== ')' && this.current().value !== ',') {
-                    fieldType = this.parseType();
-                  }
-                }
-              }
-              
-              fields.push({ name: fieldName, fieldType });
-              if (this.current().value === ',') this.advance();
-            }
-            this.expect('PUNCTUATION', ')');
-          }
-
-          variants.push({ type: 'TypeVariant', name: variantName, fields });
-          
-          if (this.current().value === '|') this.advance();
-          else break;
-        }
-
-        if (this.current().value === 'where') {
-          this.advance();
-          constraints = this.parseConstraints();
-        }
+      if (this.current().value !== '{') {
+        throw new Error(`Invalid type declaration for '${name}'. Use 'type ${name} = { ... }' for record types or 'enum ${name} = ...' for ADTs.`);
       }
 
-      return { type: 'TypeDecl', name, typeParams, constraints, variants, recordFields: isRecord ? recordFields : undefined };
+      const recordFields: { name: string; fieldType: Node; default?: Node }[] = [];
+      this.advance();
+      while (this.current().value !== '}') {
+        const fieldName = this.expect('IDENTIFIER').value;
+        const fieldType = this.parseType();
+        let defaultValue: Node | undefined;
+
+        if (this.current().value === '??') {
+          this.advance();
+          defaultValue = this.parseExpr();
+        }
+
+        recordFields.push({ name: fieldName, fieldType, default: defaultValue });
+        if (this.current().value === ',') this.advance();
+      }
+      this.expect('PUNCTUATION', '}');
+
+      if (this.current().value === 'where') {
+        this.advance();
+        constraints = this.parseConstraints();
+      }
+
+      return { type: 'TypeDecl', name, typeParams, constraints, variants, recordFields };
+    }
+
+    if (this.current().value === 'where') {
+      this.advance();
+      constraints = this.parseConstraints();
+    }
+
+    return { type: 'TypeDecl', name, typeParams, constraints, variants };
+  }
+
+  private parseEnumDecl(): TypeDecl {
+    this.advance(); // consume 'enum'
+    const name = this.expect('IDENTIFIER').value;
+    const typeParams: string[] = [];
+    let constraints: Constraint[] | undefined;
+
+    if (this.current().value === '(') {
+      this.advance();
+      while (this.current().value !== ')') {
+        typeParams.push(this.expect('IDENTIFIER').value);
+        if (this.current().value === ',') this.advance();
+      }
+      this.expect('PUNCTUATION', ')');
+    }
+
+    this.expect('OPERATOR', '=');
+
+    const variants: TypeDecl['variants'] = [];
+    while (this.current().type !== 'NEWLINE' && this.current().type !== 'EOF' && this.current().value !== 'where') {
+      const variantName = this.expect('IDENTIFIER').value;
+      const fields: { name: string; fieldType: Node }[] = [];
+
+      if (this.current().value === '(') {
+        this.advance();
+        while (this.current().value !== ')') {
+          let fieldName = '';
+          let fieldType: Node = { type: 'Identifier', name: 'any' } as Identifier;
+
+          if (this.current().type === 'IDENTIFIER') {
+            const firstIdent = this.expect('IDENTIFIER').value;
+            if (this.current().value === ':') {
+              this.advance();
+              fieldName = firstIdent;
+              if (this.current().value !== ')' && this.current().value !== ',') {
+                fieldType = this.parseType();
+              }
+            } else {
+              fieldName = firstIdent;
+              if (this.current().value !== ')' && this.current().value !== ',') {
+                fieldType = this.parseType();
+              }
+            }
+          }
+
+          fields.push({ name: fieldName, fieldType });
+          if (this.current().value === ',') this.advance();
+        }
+        this.expect('PUNCTUATION', ')');
+      }
+
+      variants.push({ type: 'TypeVariant', name: variantName, fields });
+
+      if (this.current().value === ',') {
+        this.advance();
+        continue;
+      }
+      break;
+    }
+
+    if (variants.length === 0) {
+      throw new Error(`Enum '${name}' must declare at least one variant.`);
     }
 
     if (this.current().value === 'where') {
@@ -1579,7 +1611,7 @@ class Parser {
     // Parse methods
     const methods: MethodDecl[] = [];
     while (this.current().type !== 'DEDENT' && this.current().type !== 'EOF') {
-      if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
+      if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'enum', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
         break;
       }
 
@@ -1673,7 +1705,7 @@ class Parser {
         break;
       }
 
-      if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
+      if (this.current().type === 'KEYWORD' && ['impl', 'typeclass', 'type', 'enum', 'fn', 'let', 'import', 'public'].includes(this.current().value)) {
         break;
       }
 

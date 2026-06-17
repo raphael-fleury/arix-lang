@@ -10,7 +10,7 @@ import applicative(Applicative)
 import monad(Monad)
 import show(Show, show)
 
-type List(a) = Nil | Cons(head: a, tail: List(a))
+enum List(a) = Nil, Cons(head: a, tail: List(a))
 
 @Operator("++", "infixr", 5)
 public fn append(xs, ys) =

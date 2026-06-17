@@ -8,7 +8,7 @@ import applicative(Applicative)
 import monad(Monad)
 import bool(True, False)
 
-type Maybe(a) = Some(value: a) | None
+enum Maybe(a) = Some(value: a), None
 
 public fn getOrElse(value, defaultValue) =
     match value:

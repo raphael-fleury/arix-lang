@@ -2,7 +2,7 @@
 Bool - canonical boolean ADT.
 """
 
-type Bool = True | False
+enum Bool = True, False
 
 @Operator("&&", "infix", 3)
 public fn and(x Bool, y Bool) =

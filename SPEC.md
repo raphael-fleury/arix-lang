@@ -85,8 +85,8 @@ Arix supports **Algebraic Data Types** through a generic ADT constructor in the 
 Use the built-in `createADT` function to define custom types:
 
 ```python
-type Maybe(a) = Some(value: a) | None
-type Result(a, e) = Ok(value: a) | Err(error: e)
+enum Maybe(a) = Some(value: a), None
+enum Result(a, e) = Ok(value: a), Err(error: e)
 ```
 
 The runtime provides ready-to-use ADTs:
@@ -130,13 +130,10 @@ Define custom algebraic data types for your domain:
 
 ```python
 # Domain model for user status
-type UserStatus = Active | Inactive | Banned
+enum UserStatus = Active, Inactive, Banned
 
 # With associated data
-type UserStatus = 
-    | Active(userId, lastLogin)
-    | Inactive(userId, reason)
-    | Banned(userId)
+enum UserStatus = Active(userId, lastLogin), Inactive(userId, reason), Banned(userId)
 
 fn checkStatus(user) =
     match user.status:
@@ -149,9 +146,7 @@ fn checkStatus(user) =
 
 ```python
 # Binary tree
-type Tree = 
-    | Node(value, left, right)
-    | Empty
+enum Tree = Node(value, left, right), Empty
 
 fn sumTree(node) =
     match node:
@@ -318,12 +313,12 @@ isEmpty nums             # Bool => False
 ### 8.2 Maybe and Results
 ```python
 # Maybe
-type Maybe(a) = Some(value: a) | None
+enum Maybe(a) = Some(value: a), None
 
 let age = findAge(userId) ?? 0
 
 # Result  
-type Result(a, e) = Ok(a) | Err(e)
+enum Result(a, e) = Ok(a), Err(e)
 
 match parseIntResult(input):
     Ok(n) -> n * 2
@@ -672,14 +667,14 @@ project/
 
 ### 12.1 Maybe Type
 ```python
-type Maybe(a) = Some(value: a) | None
+enum Maybe(a) = Some(value: a), None
 
 fn findUser(id Int) -> Maybe(User) = ...
 ```
 
 ### 12.2 Result Type
 ```python
-type Result(a, e) = Ok(a) | Err(e)
+enum Result(a, e) = Ok(a), Err(e)
 
 fn parseInt(s String) -> Result(Int, String) = ...
 ```
@@ -754,7 +749,7 @@ public fn main() =
 
 ### 15.3 Pattern Matching
 ```python
-type Shape = Circle(r Float) | Rectangle(w Float, h Float)
+enum Shape = Circle(r Float), Rectangle(w Float, h Float)
 
 fn area(shape Shape) -> Float =
     match shape:
@@ -907,13 +902,13 @@ constraint    ::= ident '(' ident (',' ident)* ')'
 
 ```python
 # Maybe
-type Maybe(a) = Some(value: a) | None
+enum Maybe(a) = Some(value: a), None
 
 # Result  
-type Result(a, e) = Ok(a) | Err(e)
+enum Result(a, e) = Ok(a), Err(e)
 
 # List
-type List(a) = Cons(a, List(a)) | Nil
+enum List(a) = Cons(a, List(a)), Nil
 
 # Tuple
 type Tuple2(a, b) = (a, b)
