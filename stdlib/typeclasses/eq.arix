@@ -11,13 +11,13 @@ typeclass Eq(a)
   notEq(x a, y a) -> Bool = !(eq(x, y))
 
 impl Eq for Int
-  eq(x, y) = js.BOOL(js.EQ(x, y))
+  eq(x, y) = runtime.BOOL(runtime.EQ(x, y))
 
 impl Eq for Float
-  eq(x, y) = js.BOOL(js.EQ(x, y))
+  eq(x, y) = runtime.BOOL(runtime.EQ(x, y))
 
 impl Eq for String
-  eq(x, y) = js.BOOL(js.EQ(x, y))
+  eq(x, y) = runtime.BOOL(runtime.EQ(x, y))
 
 impl Eq for Bool
   eq(x, y) =

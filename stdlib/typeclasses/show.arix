@@ -6,10 +6,10 @@ typeclass Show(a)
   show(x a) -> String
 
 impl Show for Int
-  show(x) = js.String(js.UNBOX(x))
+  show(x) = js.String(runtime.UNBOX(x))
 
 impl Show for Float
-  show(x) = js.String(js.UNBOX(x))
+  show(x) = js.String(runtime.UNBOX(x))
 
 impl Show for String
   show(x) = x

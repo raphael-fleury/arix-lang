@@ -233,60 +233,67 @@ function __arixGte(a, b) {
   return __arixUnbox(a) >= __arixUnbox(b);
 }
 
+function __arixBool(value) {
+  return Object.freeze({
+    _type: 'Bool',
+    _variant: value ? 'True' : 'False',
+    _values: []
+  });
+}
+
 /**
- * Namespace for native JavaScript operators and globals
- * Used when operator implementations need to access raw JS operations
- * Example: In impl Eq for Int, use js.EQ(x, y) instead of x == y
- * Also provides access to globals like js.console, js.Math, etc.
+ * Arix runtime operators and helpers.
+ * Use `runtime.X` in stdlib/typeclass implementations to call these.
  */
-const js = new Proxy(
-  {
-    // Comparison operators
-    EQ: (a, b) => __arixEq(a, b),
-    NE: (a, b) => __arixNe(a, b),
-    LT: (a, b) => __arixLt(a, b),
-    GT: (a, b) => __arixGt(a, b),
-    LTE: (a, b) => __arixLte(a, b),
-    GTE: (a, b) => __arixGte(a, b),
-    
-    // Arithmetic operators
-    ADD: (a, b) => __arixAdd(a, b),
-    SUB: (a, b) => __arixSub(a, b),
-    MUL: (a, b) => __arixMul(a, b),
-    DIV: (a, b) => __arixDiv(a, b),
-    DIV_INT: (a, b) => __arixDivInt(a, b),
-    MOD: (a, b) => __arixMod(a, b),
-    POW: (a, b) => __arixPow(a, b),
-    NEG: (a) => __arixNeg(a),
-    
-    // Logical operators (JS truthiness)
-    AND: (a, b) => a && b,
-    OR: (a, b) => a || b,
-    NOT: (a) => !a,
-    
-    // Bitwise operators
-    BAND: (a, b) => a & b,
-    BOR: (a, b) => a | b,
-    BXOR: (a, b) => a ^ b,
-    BNOT: (a) => ~a,
-    LSHIFT: (a, b) => a << b,
-    RSHIFT: (a, b) => a >> b,
-    URSHIFT: (a, b) => a >>> b,
-  },
-  {
-    get(target, prop) {
-      // First check if it's a defined operator
-      if (prop in target) {
-        return target[prop];
-      }
-      // Otherwise, forward to globalThis for JS interop
-      return globalThis[prop];
-    }
+const runtime = {
+  // Comparison operators
+  EQ: (a, b) => __arixEq(a, b),
+  NE: (a, b) => __arixNe(a, b),
+  LT: (a, b) => __arixLt(a, b),
+  GT: (a, b) => __arixGt(a, b),
+  LTE: (a, b) => __arixLte(a, b),
+  GTE: (a, b) => __arixGte(a, b),
+  BOOL: (v) => __arixBool(v),
+  UNBOX: (v) => __arixUnbox(v),
+
+  // Arithmetic operators
+  ADD: (a, b) => __arixAdd(a, b),
+  SUB: (a, b) => __arixSub(a, b),
+  MUL: (a, b) => __arixMul(a, b),
+  DIV: (a, b) => __arixDiv(a, b),
+  DIV_INT: (a, b) => __arixDivInt(a, b),
+  MOD: (a, b) => __arixMod(a, b),
+  POW: (a, b) => __arixPow(a, b),
+  NEG: (a) => __arixNeg(a),
+
+  // Logical operators (Arix Bool semantics)
+  AND: (a, b) => a && b,
+  OR: (a, b) => a || b,
+  NOT: (a) => !a,
+
+  // Bitwise operators
+  BAND: (a, b) => a & b,
+  BOR: (a, b) => a | b,
+  BXOR: (a, b) => a ^ b,
+  BNOT: (a) => ~a,
+  LSHIFT: (a, b) => a << b,
+  RSHIFT: (a, b) => a >> b,
+  URSHIFT: (a, b) => a >>> b,
+};
+
+/**
+ * Transparent proxy for JavaScript global interop.
+ * Use `js.Math.pow`, `js.console.log`, `js.parseInt`, etc.
+ */
+const js = new Proxy({}, {
+  get(_, prop) {
+    return globalThis[prop];
   }
-);
+});
 
 export {
   createADT,
+  runtime,
   js,
   ArixInt,
   ArixFloat,

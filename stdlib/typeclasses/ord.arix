@@ -11,19 +11,19 @@ typeclass Ord(a)
   gte(x a, y a) -> Bool = !(lt(x, y))
 
 impl Ord for Int
-  lt(x, y) = js.BOOL(js.LT(x, y))
-  gt(x, y) = js.BOOL(js.GT(x, y))
-  lte(x, y) = js.BOOL(js.LTE(x, y))
-  gte(x, y) = js.BOOL(js.GTE(x, y))
+  lt(x, y) = runtime.BOOL(runtime.LT(x, y))
+  gt(x, y) = runtime.BOOL(runtime.GT(x, y))
+  lte(x, y) = runtime.BOOL(runtime.LTE(x, y))
+  gte(x, y) = runtime.BOOL(runtime.GTE(x, y))
 
 impl Ord for Float
-  lt(x, y) = js.BOOL(js.LT(x, y))
-  gt(x, y) = js.BOOL(js.GT(x, y))
-  lte(x, y) = js.BOOL(js.LTE(x, y))
-  gte(x, y) = js.BOOL(js.GTE(x, y))
+  lt(x, y) = runtime.BOOL(runtime.LT(x, y))
+  gt(x, y) = runtime.BOOL(runtime.GT(x, y))
+  lte(x, y) = runtime.BOOL(runtime.LTE(x, y))
+  gte(x, y) = runtime.BOOL(runtime.GTE(x, y))
 
 impl Ord for String
-  lt(x, y) = js.BOOL(js.LT(x, y))
-  gt(x, y) = js.BOOL(js.GT(x, y))
-  lte(x, y) = js.BOOL(js.LTE(x, y))
-  gte(x, y) = js.BOOL(js.GTE(x, y))
+  lt(x, y) = runtime.BOOL(runtime.LT(x, y))
+  gt(x, y) = runtime.BOOL(runtime.GT(x, y))
+  lte(x, y) = runtime.BOOL(runtime.LTE(x, y))
+  gte(x, y) = runtime.BOOL(runtime.GTE(x, y))

@@ -46,6 +46,7 @@ const RUNTIME_IMPORT = (relativePath: string) =>
 
 const STDLIB_MODULES = ['bool', 'eq', 'num', 'ord', 'result', 'maybe', 'list', 'show', 'functor', 'applicative', 'monad', 'monoid', 'prelude'];
 const JS_NAMESPACE = 'js';
+const RUNTIME_NAMESPACE = 'runtime';
 interface GlobalInstanceInfo {
   typeclass: string;
   forTypes: string[];
@@ -1256,6 +1257,9 @@ export class Transpiler {
     if (name === JS_NAMESPACE) {
       throw new Error(`The identifier '${JS_NAMESPACE}' is reserved for JavaScript interop and can only be used as ${JS_NAMESPACE}.<name>.`);
     }
+    if (name === RUNTIME_NAMESPACE) {
+      throw new Error(`The identifier '${RUNTIME_NAMESPACE}' is reserved for the Arix runtime and can only be used as ${RUNTIME_NAMESPACE}.<name>.`);
+    }
 
     const fullName = this.constructors.get(name);
     if (fullName) {
@@ -1300,6 +1304,10 @@ export class Transpiler {
     if (member.object.type === 'Identifier' && (member.object as Identifier).name === JS_NAMESPACE) {
       this.runtimeImports.add('js');
       return `js.${property}`;
+    }
+    if (member.object.type === 'Identifier' && (member.object as Identifier).name === RUNTIME_NAMESPACE) {
+      this.runtimeImports.add('runtime');
+      return `runtime.${property}`;
     }
     if (member.object.type === 'MemberExpr' && this.isJsInteropMember(member.object as MemberExpr)) {
       return `${this.transpileMemberExpr(member.object as MemberExpr)}.${property}`;
@@ -1353,6 +1361,9 @@ export class Transpiler {
   private assertNotReservedIdentifier(name: string): void {
     if (name === JS_NAMESPACE) {
       throw new Error(`'${JS_NAMESPACE}' is a reserved namespace for JavaScript interop and cannot be declared or imported.`);
+    }
+    if (name === RUNTIME_NAMESPACE) {
+      throw new Error(`'${RUNTIME_NAMESPACE}' is a reserved namespace for the Arix runtime and cannot be declared or imported.`);
     }
   }
 

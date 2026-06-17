@@ -13,13 +13,13 @@ typeclass Num(a)
   signum(x a) -> a
 
 impl Num for Int
-  add(x, y) = js.ADD(x, y)
-  subtract(x, y) = js.SUB(x, y)
-  multiply(x, y) = js.MUL(x, y)
-  divide(x, y) = js.DIV_INT(x, y)
-  negate(x) = js.NEG(x)
+  add(x, y) = runtime.ADD(x, y)
+  subtract(x, y) = runtime.SUB(x, y)
+  multiply(x, y) = runtime.MUL(x, y)
+  divide(x, y) = runtime.DIV_INT(x, y)
+  negate(x) = runtime.NEG(x)
   abs(x) = match x < 0:
-    True -> js.NEG(x)
+    True -> runtime.NEG(x)
     False -> x
   signum(x) = match x < 0:
     True -> -1
@@ -28,13 +28,13 @@ impl Num for Int
       False -> 0
 
 impl Num for Float
-  add(x, y) = js.ADD(x, y)
-  subtract(x, y) = js.SUB(x, y)
-  multiply(x, y) = js.MUL(x, y)
-  divide(x, y) = js.DIV(x, y)
-  negate(x) = js.NEG(x)
+  add(x, y) = runtime.ADD(x, y)
+  subtract(x, y) = runtime.SUB(x, y)
+  multiply(x, y) = runtime.MUL(x, y)
+  divide(x, y) = runtime.DIV(x, y)
+  negate(x) = runtime.NEG(x)
   abs(x) = match x < 0.0:
-    True -> js.NEG(x)
+    True -> runtime.NEG(x)
     False -> x
   signum(x) = match x < 0.0:
     True -> -1.0

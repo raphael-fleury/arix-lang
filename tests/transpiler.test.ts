@@ -119,13 +119,16 @@ const __jsBase = {
   LSHIFT: (a, b) => a << b,
   RSHIFT: (a, b) => a >> b,
   URSHIFT: (a, b) => a >>> b,
+  BOOL: (v) => Object.freeze({ _type: 'Bool', _variant: v ? 'True' : 'False', _values: [] }),
+  UNBOX: (v) => (v && typeof v === 'object' && 'value' in v) ? v.value : v,
+  NEG: (a) => -a,
+  DIV_INT: (a, b) => Math.trunc(a / b),
 };
 
-const js = new Proxy(__jsBase, {
-  get(target, prop) {
-    if (prop in target) {
-      return target[prop];
-    }
+const runtime = __jsBase;
+
+const js = new Proxy({}, {
+  get(_, prop) {
     return globalThis[prop];
   }
 });
@@ -465,6 +468,11 @@ describe('Transpiler', () => {
 
   it('rejects reserved js namespace redeclaration', () => {
     const ast = parse('fn main(js) = js');
+    expect(() => transpile(ast)).toThrow(/reserved namespace/);
+  });
+
+  it('rejects reserved runtime namespace redeclaration', () => {
+    const ast = parse('fn main(runtime) = runtime');
     expect(() => transpile(ast)).toThrow(/reserved namespace/);
   });
 
