@@ -7,7 +7,6 @@ import type {
   StringInterpolation,
   StringPart,
   ExprPart,
-  BooleanLiteral,
   NoneLiteral,
   Identifier,
   BinaryExpr,
@@ -27,10 +26,10 @@ import type {
   TupleLiteral,
   PipeExpr,
   BlockExpr,
-  ReturnExpr,
   AwaitExpr,
   ImportStmt,
   TypeDecl,
+  TypeAliasDecl,
   TypeclassDecl,
   InstanceDecl,
   MethodDecl,
@@ -585,7 +584,7 @@ class Parser {
     return { type: 'ConstructorPattern', name, patterns };
   }
 
-  private parseTypeDecl(): TypeDecl {
+  private parseTypeDecl(): TypeDecl | TypeAliasDecl {
     this.advance(); // consume 'type'
     const name = this.expect('IDENTIFIER').value;
     const typeParams: string[] = [];
@@ -605,7 +604,14 @@ class Parser {
     if (this.current().value === '=') {
       this.advance();
       if (this.current().value !== '{') {
-        throw new Error(`Invalid type declaration for '${name}'. Use 'type ${name} = { ... }' for record types or 'enum ${name} = ...' for ADTs.`);
+        const aliasedType = this.parseType();
+
+        if (this.current().value === 'where') {
+          this.advance();
+          constraints = this.parseConstraints();
+        }
+
+        return { type: 'TypeAliasDecl', name, typeParams, aliasedType, constraints };
       }
 
       const recordFields: { name: string; fieldType: Node; default?: Node }[] = [];

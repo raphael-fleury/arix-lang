@@ -130,6 +130,17 @@ describe('Parser', () => {
     expect(typeDecl.recordFields[1].default?.value).toBe(18);
   });
 
+  it('parses type alias declaration', () => {
+    const ast = parse('type ListOfInts = List(Int)');
+    const aliasDecl = ast.body[0] as any;
+
+    expect(aliasDecl.type).toBe('TypeAliasDecl');
+    expect(aliasDecl.name).toBe('ListOfInts');
+    expect(aliasDecl.aliasedType.type).toBe('CallExpr');
+    expect(aliasDecl.aliasedType.callee.name).toBe('List');
+    expect(aliasDecl.aliasedType.args[0].name).toBe('Int');
+  });
+
   it('parses enum declaration with where constraints', () => {
     const ast = parse('enum List(a) = Nil, Cons(head: a, tail: List(a)) where Show(a)');
     const typeDecl = ast.body[0] as any;

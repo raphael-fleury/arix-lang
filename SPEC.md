@@ -16,7 +16,7 @@
 
 ### 2.1 Basic Syntax
 - Indentation-based (significant whitespace)
-- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `when`, `import`, `type`, `typeclass`, `impl`, `for`, `in`, `while`, `break`, `continue`, `where`, `async`, `await`, `return`, `as`, `true`, `false`
+- Keywords: `fn`, `let`, `let mut`, `public`, `internal`, `match`, `when`, `import`, `type`, `enum`,`typeclass`, `impl`, `for`, `in`, `while`, `break`, `continue`, `where`, `async`, `await`, `return`, `as`, `true`, `false`
 - Comments: `# single line`, `""" multi-line """`
 
 ### 2.2 Nomenclature

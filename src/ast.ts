@@ -27,6 +27,7 @@ export type NodeType =
   | 'AwaitExpr'
   | 'ImportStmt'
   | 'TypeDecl'
+  | 'TypeAliasDecl'
   | 'TypeclassDecl'
   | 'InstanceDecl'
   | 'MethodDecl'
@@ -275,6 +276,14 @@ export interface TypeDecl extends Node {
   constraints?: Constraint[];
   variants: TypeVariant[];
   recordFields?: { name: string; fieldType: Node; default?: Node }[];
+}
+
+export interface TypeAliasDecl extends Node {
+  type: 'TypeAliasDecl';
+  name: string;
+  typeParams?: string[];
+  aliasedType: Node;
+  constraints?: Constraint[];
 }
 
 export interface TypeclassDecl extends Node {

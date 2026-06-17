@@ -235,4 +235,15 @@ describe('TypeChecker', () => {
 
     expect(diagnostics.some(d => d.code === 'ARX3006')).toBe(false);
   });
+
+  it('accepts type aliases in type annotations', () => {
+    const diagnostics = runCheck(
+      [
+        'type ListOfInts = List(Int)',
+        'fn size(xs ListOfInts) = 0',
+      ].join('\n'),
+    );
+
+    expect(diagnostics).toHaveLength(0);
+  });
 });

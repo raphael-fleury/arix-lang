@@ -26,6 +26,7 @@ import type {
   AwaitExpr,
   ImportStmt,
   TypeDecl,
+  TypeAliasDecl,
   TypeclassDecl,
   InstanceDecl,
   MethodDecl,
@@ -351,6 +352,9 @@ export class Transpiler {
       case 'TypeDecl':
         this.transpileTypeDecl(node as TypeDecl);
         break;
+      case 'TypeAliasDecl':
+        this.transpileTypeAliasDecl(node as TypeAliasDecl);
+        break;
       case 'TypeclassDecl':
         this.transpileTypeclassDecl(node as TypeclassDecl);
         break;
@@ -597,6 +601,10 @@ export class Transpiler {
       }
     }
     this.writeln();
+  }
+
+  private transpileTypeAliasDecl(_node: TypeAliasDecl): void {
+    // Type aliases are compile-time only and emit no JS runtime code.
   }
 
   private transpileType(node: Node): string {

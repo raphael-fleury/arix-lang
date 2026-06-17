@@ -669,6 +669,18 @@ describe('Transpiler', () => {
     expect(js).not.toContain('createADT');
   });
 
+  it('does not emit runtime code for type aliases', () => {
+    const src = [
+      'type ListOfInts = List(Int)',
+      'fn main() = 1',
+    ].join('\n');
+    const ast = parse(src);
+    const js = transpile(ast);
+
+    expect(js).not.toContain('const ListOfInts =');
+    expect(js).not.toContain("createADT('ListOfInts'");
+  });
+
   it('transpiles custom ADT instantiation and pattern matching', () => {
     const src = [
       'enum Status = Active, Inactive',
