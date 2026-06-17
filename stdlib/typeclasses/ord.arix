@@ -11,43 +11,19 @@ typeclass Ord(a)
   gte(x a, y a) -> Bool = !(lt(x, y))
 
 impl Ord for Int
-  lt(x, y) = match js.LT(x, y).toString():
-    "true" -> True
-    _ -> False
-  gt(x, y) = match js.GT(x, y).toString():
-    "true" -> True
-    _ -> False
-  lte(x, y) = match js.LTE(x, y).toString():
-    "true" -> True
-    _ -> False
-  gte(x, y) = match js.GTE(x, y).toString():
-    "true" -> True
-    _ -> False
+  lt(x, y) = js.BOOL(js.LT(x, y))
+  gt(x, y) = js.BOOL(js.GT(x, y))
+  lte(x, y) = js.BOOL(js.LTE(x, y))
+  gte(x, y) = js.BOOL(js.GTE(x, y))
 
 impl Ord for Float
-  lt(x, y) = match js.LT(x, y).toString():
-    "true" -> True
-    _ -> False
-  gt(x, y) = match js.GT(x, y).toString():
-    "true" -> True
-    _ -> False
-  lte(x, y) = match js.LTE(x, y).toString():
-    "true" -> True
-    _ -> False
-  gte(x, y) = match js.GTE(x, y).toString():
-    "true" -> True
-    _ -> False
+  lt(x, y) = js.BOOL(js.LT(x, y))
+  gt(x, y) = js.BOOL(js.GT(x, y))
+  lte(x, y) = js.BOOL(js.LTE(x, y))
+  gte(x, y) = js.BOOL(js.GTE(x, y))
 
 impl Ord for String
-  lt(x, y) = match js.LT(x, y).toString():
-    "true" -> True
-    _ -> False
-  gt(x, y) = match js.GT(x, y).toString():
-    "true" -> True
-    _ -> False
-  lte(x, y) = match js.LTE(x, y).toString():
-    "true" -> True
-    _ -> False
-  gte(x, y) = match js.GTE(x, y).toString():
-    "true" -> True
-    _ -> False
+  lt(x, y) = js.BOOL(js.LT(x, y))
+  gt(x, y) = js.BOOL(js.GT(x, y))
+  lte(x, y) = js.BOOL(js.LTE(x, y))
+  gte(x, y) = js.BOOL(js.GTE(x, y))

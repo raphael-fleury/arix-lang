@@ -11,19 +11,13 @@ typeclass Eq(a)
   notEq(x a, y a) -> Bool = !(eq(x, y))
 
 impl Eq for Int
-  eq(x, y) = match js.EQ(x, y).toString():
-    "true" -> True
-    _ -> False
+  eq(x, y) = js.BOOL(js.EQ(x, y))
 
 impl Eq for Float
-  eq(x, y) = match js.EQ(x, y).toString():
-    "true" -> True
-    _ -> False
+  eq(x, y) = js.BOOL(js.EQ(x, y))
 
 impl Eq for String
-  eq(x, y) = match js.EQ(x, y).toString():
-    "true" -> True
-    _ -> False
+  eq(x, y) = js.BOOL(js.EQ(x, y))
 
 impl Eq for Bool
   eq(x, y) =
