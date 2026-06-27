@@ -139,6 +139,28 @@ describe('TypeChecker', () => {
     expect(diagnostics.some(d => d.code === 'ARX4003')).toBe(true);
   });
 
+  it('rejects non-boolean guard conditions in match', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'fn score(s Status) = match s: Active when 42 -> "number" Inactive -> "inactive"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4004')).toBe(true);
+  });
+
+  it('accepts boolean guard conditions in match', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'fn isActive(s Status) = match s: Active when true -> "yes" Inactive -> "no"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4004')).toBe(false);
+  });
+
   it('rejects reserved js identifier declarations', () => {
     const diagnostics = runCheck('fn main(js) = js');
     expect(diagnostics.some(d => d.code === 'ARX1003' || d.code === 'ARX1004')).toBe(true);

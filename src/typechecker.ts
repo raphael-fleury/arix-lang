@@ -591,6 +591,7 @@ export class TypeChecker {
         this.declarePattern(arm.pattern, undefined, matchExpr);
         if (arm.guard) {
           this.visitExpr(arm.guard.condition);
+          this.validateGuardCondition(arm.guard.condition);
         }
         this.visitExpr(arm.body);
 
@@ -731,6 +732,24 @@ export class TypeChecker {
     }
 
     return true;
+  }
+
+  private validateGuardCondition(condition: Node): void {
+    const guardType = this.inferTypeTermFromExpr(condition);
+    if (!guardType) {
+      return;
+    }
+
+    if (guardType.kind === 'name' && guardType.name === 'Bool' && guardType.args.length === 0) {
+      return;
+    }
+
+    this.addDiagnostic(
+      'ARX4004',
+      `Guard condition must evaluate to Bool, got '${this.typeTermToString(guardType)}'.`,
+      condition,
+      'Ensure the when clause expression has type Bool.',
+    );
   }
 
   private validateTypeclassInstances(program: Program): void {
