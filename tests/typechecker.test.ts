@@ -161,6 +161,39 @@ describe('TypeChecker', () => {
     expect(diagnostics.some(d => d.code === 'ARX4004')).toBe(false);
   });
 
+  it('reports unreachable arm after wildcard arm', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'fn describe(s Status) = match s: _ -> "any" Active -> "active"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4005')).toBe(true);
+  });
+
+  it('reports unreachable duplicate constructor arm', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'fn describe(s Status) = match s: Active -> "a" Active -> "b" Inactive -> "i"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4005')).toBe(true);
+  });
+
+  it('does not mark guarded predecessor as unreachable duplicate', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'fn describe(s Status) = match s: Active when false -> "x" Active -> "y" Inactive -> "i"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4005')).toBe(false);
+  });
+
   it('rejects reserved js identifier declarations', () => {
     const diagnostics = runCheck('fn main(js) = js');
     expect(diagnostics.some(d => d.code === 'ARX1003' || d.code === 'ARX1004')).toBe(true);

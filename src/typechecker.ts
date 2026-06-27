@@ -572,19 +572,45 @@ export class TypeChecker {
 
     const matchedType = this.inferTypeFromValue(matchExpr.value);
     const seenVariants = new Set<string>();
+    const unguardedCoveredVariants = new Set<string>();
     let expectedBodyType: TypeTerm | undefined;
+    let hasCatchAllUnguarded = false;
     let hasWildcard = false;
 
     for (const arm of matchExpr.arms) {
+      if (hasCatchAllUnguarded) {
+        this.addDiagnostic(
+          'ARX4005',
+          'Unreachable match arm: a previous wildcard arm already covers all remaining cases.',
+          arm.body,
+          'Remove this arm or move it before the wildcard arm.',
+        );
+      }
+
+      const coveredVariants = this.getCoveredVariantsForPattern(arm.pattern, matchedType);
+      if (!arm.guard && coveredVariants.length > 0 && coveredVariants.every(variant => unguardedCoveredVariants.has(variant))) {
+        this.addDiagnostic(
+          'ARX4005',
+          'Unreachable match arm: this pattern is already covered by previous arms.',
+          arm.body,
+          'Remove this arm or place it before the broader pattern.',
+        );
+      }
+
       if (arm.pattern.type === 'WildcardPattern') {
         hasWildcard = true;
+        if (!arm.guard) {
+          hasCatchAllUnguarded = true;
+        }
       }
 
       this.validateMatchPatternAgainstType(arm.pattern, matchedType, matchExpr);
 
-      const coveredVariants = this.getCoveredVariantsForPattern(arm.pattern, matchedType);
       for (const variant of coveredVariants) {
         seenVariants.add(variant);
+        if (!arm.guard) {
+          unguardedCoveredVariants.add(variant);
+        }
       }
 
       this.withScope(() => {
