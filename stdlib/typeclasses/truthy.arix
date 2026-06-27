@@ -1,0 +1,30 @@
+import bool(True, False)
+import prelude
+
+typeclass Truthy(a)
+  isTruthy(x a) -> Bool
+  isFalsy(x a) -> Bool = !(isTruthy(x))
+
+impl Truthy for Bool
+  isTruthy(x) = x
+
+# impl Truthy for Int
+#   isTruthy(x) = match x:
+#     0 -> False
+#     _ -> True
+
+# impl Truthy for Float
+#   isTruthy(x) = match x:
+#     0.0 -> False
+#     _ -> True
+
+# impl Truthy for String
+#   isTruthy(x) = match x:
+#     "" -> False
+#     _ -> True
+
+enum IfState = Selected(exec), Pending
+
+fn makeIfChain(state IfState) = { elseIf: (cond2, exec2) -> match state: Selected(chosenExec) -> makeIfChain(Selected(chosenExec)) Pending -> match isTruthy(cond2): True -> makeIfChain(Selected(exec2)) False -> makeIfChain(Pending), else: (fallbackExec) -> match state: Selected(chosenExec) -> chosenExec() Pending -> fallbackExec() }
+
+public fn if_(cond a) where Truthy(a) = { then: (exec) -> match isTruthy(cond): True -> makeIfChain(Selected(exec)) False -> makeIfChain(Pending) }
