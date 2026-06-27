@@ -1131,7 +1131,7 @@ export class TypeChecker {
 
   private validateFunctionCallConstraints(functionName: string, call: CallExpr): void {
     const fnDecl = this.knownFunctionDecls.get(functionName);
-    if (!fnDecl || !fnDecl.constraints || fnDecl.constraints.length === 0) {
+    if (!fnDecl) {
       return;
     }
 
@@ -1164,7 +1164,26 @@ export class TypeChecker {
         continue;
       }
 
-      this.unifyTerms(paramType, argType, substitution);
+      const probeSubstitution = new Map(substitution);
+      if (!this.unifyTerms(paramType, argType, probeSubstitution)) {
+        const expectedType = this.applySubstitution(paramType, substitution);
+        this.addDiagnostic(
+          'ARX1008',
+          `Call to '${functionName}' has incompatible type for argument '${param.name}': expected '${this.typeTermToString(expectedType)}', got '${this.typeTermToString(argType)}'.`,
+          arg,
+          'Pass a value with a type compatible with the function parameter annotation.',
+        );
+        continue;
+      }
+
+      substitution.clear();
+      for (const [name, typeTerm] of probeSubstitution.entries()) {
+        substitution.set(name, typeTerm);
+      }
+    }
+
+    if (!fnDecl.constraints || fnDecl.constraints.length === 0) {
+      return;
     }
 
     for (const constraint of fnDecl.constraints) {

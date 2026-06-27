@@ -29,6 +29,16 @@ describe('TypeChecker', () => {
     expect(diagnostics.some(d => d.code === 'ARX1002')).toBe(true);
   });
 
+  it('rejects function calls with incompatible argument types', () => {
+    const diagnostics = runCheck('fn takeInt(x Int) = x\nfn main() = takeInt("oops")');
+    expect(diagnostics.some(d => d.code === 'ARX1008')).toBe(true);
+  });
+
+  it('accepts function calls with compatible argument types', () => {
+    const diagnostics = runCheck('fn takeInt(x Int) = x\nfn main() = takeInt(42)');
+    expect(diagnostics.some(d => d.code === 'ARX1008')).toBe(false);
+  });
+
   it('validates missing required methods in instances', () => {
     const diagnostics = runCheck(
       [
