@@ -116,6 +116,29 @@ describe('TypeChecker', () => {
     expect(diagnostics.some(d => d.code === 'ARX4001')).toBe(true);
   });
 
+  it('rejects constructor pattern from a different ADT in match', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'enum Mode = Auto, Manual',
+        'fn describe(s Status) = match s: Auto -> "auto" Active -> "active" Inactive -> "inactive"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4002')).toBe(true);
+  });
+
+  it('rejects inconsistent result types across match arms', () => {
+    const diagnostics = runCheck(
+      [
+        'enum Status = Active, Inactive',
+        'fn score(s Status) = match s: Active -> 1 Inactive -> "none"',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX4003')).toBe(true);
+  });
+
   it('rejects reserved js identifier declarations', () => {
     const diagnostics = runCheck('fn main(js) = js');
     expect(diagnostics.some(d => d.code === 'ARX1003' || d.code === 'ARX1004')).toBe(true);

@@ -572,12 +572,16 @@ export class TypeChecker {
 
     const matchedType = this.inferTypeFromValue(matchExpr.value);
     const seenVariants = new Set<string>();
+    let expectedBodyType: TypeTerm | undefined;
     let hasWildcard = false;
 
     for (const arm of matchExpr.arms) {
       if (arm.pattern.type === 'WildcardPattern') {
         hasWildcard = true;
       }
+
+      this.validateMatchPatternAgainstType(arm.pattern, matchedType, matchExpr);
+
       const coveredVariants = this.getCoveredVariantsForPattern(arm.pattern, matchedType);
       for (const variant of coveredVariants) {
         seenVariants.add(variant);
@@ -589,6 +593,25 @@ export class TypeChecker {
           this.visitExpr(arm.guard.condition);
         }
         this.visitExpr(arm.body);
+
+        const armBodyType = this.inferTypeTermFromExpr(arm.body);
+        if (!armBodyType) {
+          return;
+        }
+
+        if (!expectedBodyType) {
+          expectedBodyType = armBodyType;
+          return;
+        }
+
+        if (!this.areTypeTermsEquivalent(expectedBodyType, armBodyType)) {
+          this.addDiagnostic(
+            'ARX4003',
+            `Inconsistent match arm result types: expected '${this.typeTermToString(expectedBodyType)}', got '${this.typeTermToString(armBodyType)}'.`,
+            arm.body,
+            'Ensure all match arms produce compatible result types.',
+          );
+        }
       });
     }
 
@@ -636,6 +659,78 @@ export class TypeChecker {
     }
 
     return [];
+  }
+
+  private validateMatchPatternAgainstType(pattern: Pattern, matchedType: string | undefined, ownerNode: Node): void {
+    if (pattern.type === 'ConstructorPattern') {
+      const ownerType = this.variantToType.get(pattern.name);
+      if (!ownerType) {
+        this.addDiagnostic(
+          'ARX4002',
+          `Unknown constructor pattern '${pattern.name}' in match arm.`,
+          ownerNode,
+          'Use a declared constructor name for this pattern.',
+        );
+        return;
+      }
+
+      if (matchedType && ownerType !== matchedType) {
+        this.addDiagnostic(
+          'ARX4002',
+          `Constructor pattern '${pattern.name}' does not belong to matched type '${matchedType}'.`,
+          ownerNode,
+          'Use a constructor from the same ADT being matched.',
+        );
+      }
+
+      const expectedArity = this.getConstructorArity(pattern.name);
+      if (expectedArity !== undefined && expectedArity !== pattern.patterns.length) {
+        this.addDiagnostic(
+          'ARX4002',
+          `Constructor pattern '${pattern.name}' expects ${expectedArity} argument pattern(s), got ${pattern.patterns.length}.`,
+          ownerNode,
+        );
+      }
+      return;
+    }
+
+    if (pattern.type === 'ListPattern' && matchedType) {
+      const expectedVariants = this.adtVariants.get(matchedType);
+      const hasListAdtShape = !!expectedVariants && expectedVariants.has('Nil') && expectedVariants.has('Cons');
+      if (!hasListAdtShape) {
+        this.addDiagnostic(
+          'ARX4002',
+          `List pattern cannot be used when matching type '${matchedType}'.`,
+          ownerNode,
+          'Use constructor patterns compatible with the matched ADT.',
+        );
+      }
+    }
+  }
+
+  private getConstructorArity(constructorName: string): number | undefined {
+    const ownerType = this.variantToType.get(constructorName);
+    if (!ownerType) {
+      return undefined;
+    }
+
+    const typeDecl = this.knownTypeDecls.get(ownerType);
+    const variant = typeDecl?.variants.find(v => v.name === constructorName);
+    return variant?.fields.length;
+  }
+
+  private areTypeTermsEquivalent(left: TypeTerm, right: TypeTerm): boolean {
+    if (left.kind !== right.kind || left.name !== right.name || left.args.length !== right.args.length) {
+      return false;
+    }
+
+    for (let i = 0; i < left.args.length; i++) {
+      if (!this.areTypeTermsEquivalent(left.args[i], right.args[i])) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private validateTypeclassInstances(program: Program): void {
