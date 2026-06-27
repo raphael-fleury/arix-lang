@@ -43,6 +43,30 @@ describe('TypeChecker', () => {
     expect(diagnostics.some(d => d.code === 'ARX2003')).toBe(true);
   });
 
+  it('checks identifiers inside impl method bodies', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String',
+        'impl Show for Int',
+        '  show(x) = missingValue',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX1001')).toBe(true);
+  });
+
+  it('checks identifiers inside default typeclass method bodies', () => {
+    const diagnostics = runCheck(
+      [
+        'typeclass Show(a)',
+        '  show(x a) -> String = missingValue',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.some(d => d.code === 'ARX1001')).toBe(true);
+  });
+
   it('reports non-exhaustive match for typed ADT values', () => {
     const diagnostics = runCheck(
       [

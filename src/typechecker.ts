@@ -10,6 +10,7 @@ import type {
   MatchExpr,
   MemberExpr,
   MethodDecl,
+  MethodImpl,
   Node,
   NumberLiteral,
   Param,
@@ -293,7 +294,9 @@ export class TypeChecker {
         this.validateTypeDeclConstraints(node as TypeDecl);
         return;
       case 'TypeclassDecl': {
-        this.validateTypeclassDeclConstraints(node as TypeclassDecl);
+        const typeclassDecl = node as TypeclassDecl;
+        this.validateTypeclassDeclConstraints(typeclassDecl);
+        this.visitTypeclassMethodBodies(typeclassDecl);
         return;
       }
       case 'InstanceDecl': {
@@ -691,6 +694,8 @@ export class TypeChecker {
             node,
           );
         }
+
+        this.visitMethodImpl(method);
       }
 
       const requiredMethods = typeclass.methods.filter(method => !method.body).map(method => method.name);
@@ -704,7 +709,43 @@ export class TypeChecker {
           );
         }
       }
+
     }
+  }
+
+  private visitTypeclassMethodBodies(typeclassDecl: TypeclassDecl): void {
+    for (const method of typeclassDecl.methods) {
+      if (!method.body) {
+        continue;
+      }
+
+      this.visitMethodDecl(method);
+    }
+  }
+
+  private visitMethodImpl(method: MethodImpl): void {
+    this.withScope(() => {
+      this.declareName('params');
+      for (const param of method.params) {
+        this.declareName(param);
+      }
+      this.visitExpr(method.body);
+    });
+  }
+
+  private visitMethodDecl(method: MethodDecl): void {
+    if (!method.body) {
+      return;
+    }
+
+    this.withScope(() => {
+      this.declareName('params');
+      for (const param of method.params) {
+        const typeName = this.extractTypeName(param.paramType);
+        this.declareName(param.name, typeName);
+      }
+      this.visitExpr(method.body);
+    });
   }
 
   private validateFunctionConstraints(fn: FunctionDecl): void {
