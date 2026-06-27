@@ -72,7 +72,7 @@ export class TypeChecker {
   private readonly variantToType = new Map<string, string>();
   private readonly importedNames = new Set<string>();
   private readonly scopes: Set<string>[] = [new Set()];
-  private readonly typedScopes: Map<string, string>[] = [new Map()];
+  private readonly typedScopes: Map<string, TypeTerm>[] = [new Map()];
   private filePath = '';
 
   constructor(options: TypeCheckerOptions) {
@@ -1514,20 +1514,37 @@ export class TypeChecker {
     this.assertNotReservedIdentifier(name, node, 'ARX1003');
     const scope = this.scopes[this.scopes.length - 1];
     scope.add(name);
-    if (typeName) {
+    const typeTerm = this.typeTermFromDeclaredName(typeName);
+    if (typeTerm) {
       const typedScope = this.typedScopes[this.typedScopes.length - 1];
-      typedScope.set(name, typeName);
+      typedScope.set(name, typeTerm);
     }
   }
 
   private lookupType(name: string): string | undefined {
+    return this.lookupTypeTerm(name)?.name;
+  }
+
+  private lookupTypeTerm(name: string): TypeTerm | undefined {
     for (let i = this.typedScopes.length - 1; i >= 0; i--) {
-      const typeName = this.typedScopes[i].get(name);
-      if (typeName) {
-        return typeName;
+      const typeTerm = this.typedScopes[i].get(name);
+      if (typeTerm) {
+        return typeTerm;
       }
     }
     return undefined;
+  }
+
+  private typeTermFromDeclaredName(typeName: string | undefined): TypeTerm | undefined {
+    if (!typeName) {
+      return undefined;
+    }
+
+    if (this.looksLikeTypeVariable(typeName)) {
+      return { kind: 'var', name: typeName, args: [] };
+    }
+
+    return { kind: 'name', name: typeName, args: [] };
   }
 
   private isNameDeclared(name: string): boolean {
