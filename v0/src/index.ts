@@ -15,7 +15,7 @@ import { emitJS } from './backend/js.js'
 import { parse } from './parser.js'
 import { TypeChecker } from './typechecker.js'
 import { IrProgram } from './ir.js'
-import { Diagnostic } from './diagnostics.js'
+import { Diagnostic, createDiagnostic } from './diagnostics.js'
 
 export type FileResolver = (filePath: string) => string | undefined
 
@@ -65,17 +65,39 @@ function mergePrograms(programs: IrProgram[]): IrProgram {
   }
 }
 
+function compileProgram(
+  source: string,
+  filePath: string,
+  resolver: FileResolver,
+): { program?: IrProgram; diagnostics: Diagnostic[] } {
+  try {
+    const programs = collectModules(filePath, source, resolver, new Set())
+    const merged = mergePrograms(programs)
+    const diagnostics = new TypeChecker().check(merged, filePath)
+    return { program: merged, diagnostics }
+  } catch (error) {
+    if (error instanceof Error) {
+      const line = (error as { line?: number }).line
+      const column = (error as { column?: number }).column
+      return {
+        diagnostics: [createDiagnostic('ARX1000', error.message, filePath, line, column)],
+      }
+    }
+    return {
+      diagnostics: [createDiagnostic('ARX1000', 'Unexpected compiler failure.', filePath)],
+    }
+  }
+}
+
 export function compileSourceToC(
   source: string,
   filePath = 'input.arix',
   resolver?: FileResolver,
 ): { cSource: string; diagnostics: Diagnostic[] } {
   const effectiveResolver: FileResolver = resolver ?? (() => undefined)
-  const programs = collectModules(filePath, source, effectiveResolver, new Set())
-  const merged = mergePrograms(programs)
-  const diagnostics = new TypeChecker().check(merged, filePath)
+  const { program, diagnostics } = compileProgram(source, filePath, effectiveResolver)
   return {
-    cSource: diagnostics.length === 0 ? emitC(merged) : '',
+    cSource: diagnostics.length === 0 && program ? emitC(program) : '',
     diagnostics,
   }
 }
@@ -86,11 +108,9 @@ export function compileSourceToJS(
   resolver?: FileResolver,
 ): { jsSource: string; diagnostics: Diagnostic[] } {
   const effectiveResolver: FileResolver = resolver ?? (() => undefined)
-  const programs = collectModules(filePath, source, effectiveResolver, new Set())
-  const merged = mergePrograms(programs)
-  const diagnostics = new TypeChecker().check(merged, filePath)
+  const { program, diagnostics } = compileProgram(source, filePath, effectiveResolver)
   return {
-    jsSource: diagnostics.length === 0 ? emitJS(merged) : '',
+    jsSource: diagnostics.length === 0 && program ? emitJS(program) : '',
     diagnostics,
   }
 }

@@ -81,4 +81,17 @@ describe('backend', () => {
     expect(result.cSource).toContain('static ArixValue *impl_Eq_equal_Int(ArixValue *a, ArixValue *b)')
     expect(result.cSource).toContain('return impl_Eq_equal_Int(arix_int(1), arix_int(2));')
   })
+
+  it('returns friendly diagnostic for unterminated string literal', () => {
+    const result = compileSourceToC(`
+      let main: () => Unit = () => {
+        print("hello);
+      };
+    `, 'unterminated-string.arix')
+
+    expect(result.cSource).toBe('')
+    expect(result.diagnostics).toHaveLength(1)
+    expect(result.diagnostics[0].code).toBe('ARX1000')
+    expect(result.diagnostics[0].message).toContain('Unterminated string literal.')
+  })
 })

@@ -7,6 +7,19 @@ export interface Token {
   column: number
 }
 
+export class LexerError extends Error {
+  readonly code = 'ARX1001'
+  readonly line: number
+  readonly column: number
+
+  constructor(message: string, line: number, column: number) {
+    super(message)
+    this.name = 'LexerError'
+    this.line = line
+    this.column = column
+  }
+}
+
 const keywords = new Set([
   'module',
   'import',
@@ -72,7 +85,7 @@ function readNumber(source: string, index: number): [string, number] {
   return [value, cursor]
 }
 
-function readString(source: string, index: number): [string, number] {
+function readString(source: string, index: number): [string, number, boolean] {
   let value = ''
   let cursor = index + 1
   while (cursor < source.length && source[cursor] !== '"') {
@@ -85,10 +98,11 @@ function readString(source: string, index: number): [string, number] {
     value += current
     cursor += 1
   }
-  return [value, Math.min(cursor + 1, source.length)]
+  const terminated = cursor < source.length && source[cursor] === '"'
+  return [value, Math.min(cursor + 1, source.length), terminated]
 }
 
-function readChar(source: string, index: number): [string, number] {
+function readChar(source: string, index: number): [string, number, boolean] {
   let cursor = index + 1
   let value = source[cursor] ?? ''
   if (value === '\\') {
@@ -98,11 +112,13 @@ function readChar(source: string, index: number): [string, number] {
     cursor += 1
   }
 
+  let terminated = false
   if (source[cursor] === "'") {
+    terminated = true
     cursor += 1
   }
 
-  return [value, Math.min(cursor, source.length)]
+  return [value, Math.min(cursor, source.length), terminated]
 }
 
 interface CursorState {
@@ -159,8 +175,9 @@ function skipBlockComment(source: string, state: CursorState): boolean {
   if (source[state.index] === '*' && source[state.index + 1] === '/') {
     state.index += 2
     state.column += 2
+    return true
   }
-  return true
+  throw new LexerError('Unterminated block comment.', state.line, state.column)
 }
 
 function skipTrivia(source: string, state: CursorState): void {
@@ -193,7 +210,7 @@ function readNumberToken(source: string, state: CursorState): Token {
 function readStringToken(source: string, state: CursorState): Token {
   const tokenLine = state.line
   const tokenColumn = state.column
-  const [value, nextIndex] = readString(source, state.index)
+  const [value, nextIndex, terminated] = readString(source, state.index)
   for (let cursor = state.index; cursor < nextIndex; cursor += 1) {
     if (source[cursor] === '\n') {
       state.line += 1
@@ -203,15 +220,21 @@ function readStringToken(source: string, state: CursorState): Token {
     }
   }
   state.index = nextIndex
+  if (!terminated) {
+    throw new LexerError('Unterminated string literal.', tokenLine, tokenColumn)
+  }
   return { type: 'string', value, line: tokenLine, column: tokenColumn }
 }
 
 function readCharToken(source: string, state: CursorState): Token {
   const tokenLine = state.line
   const tokenColumn = state.column
-  const [value, nextIndex] = readChar(source, state.index)
+  const [value, nextIndex, terminated] = readChar(source, state.index)
   state.column += nextIndex - state.index
   state.index = nextIndex
+  if (!terminated) {
+    throw new LexerError('Unterminated char literal.', tokenLine, tokenColumn)
+  }
   return { type: 'char', value, line: tokenLine, column: tokenColumn }
 }
 
