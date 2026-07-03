@@ -65,4 +65,31 @@ describe('lexer', () => {
     expect(eof.line).toBe(1)
     expect(eof.column).toBe(11)
   })
+
+  it('recovers from unterminated string by consuming until eof', () => {
+    const tokens = tokenize('let s = "hello')
+    const stringToken = tokens.find(token => token.type === 'string')
+    const eof = tokens[tokens.length - 1]
+
+    expect(stringToken?.value).toBe('hello')
+    expect(eof.type).toBe('eof')
+  })
+
+  it('recovers from unterminated char literal with best-effort tokenization', () => {
+    const tokens = tokenize("let c = 'x")
+    const charToken = tokens.find(token => token.type === 'char')
+    const eof = tokens[tokens.length - 1]
+
+    expect(charToken?.value).toBe('x')
+    expect(eof.type).toBe('eof')
+  })
+
+  it('ignores unterminated block comment remainder and still emits eof', () => {
+    const tokens = tokenize('let a = 1; /* never closes')
+    const values = tokens.filter(token => token.type !== 'eof').map(token => token.value)
+    const eof = tokens[tokens.length - 1]
+
+    expect(values).toEqual(['let', 'a', '=', '1', ';'])
+    expect(eof.type).toBe('eof')
+  })
 })
