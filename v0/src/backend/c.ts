@@ -5,7 +5,6 @@ import {
   EnumDecl,
   Expr,
   FunctionDecl,
-  ImplementationDecl,
   LetDecl,
   MatchExpr,
   Pattern,
@@ -60,7 +59,7 @@ function collectImplementationMethodInfo(program: IrProgram): ImplementationMeth
       continue
     }
 
-    const implementation = item as ImplementationDecl
+    const implementation = item
     const suffix = implementation.typeParams.join('_') || 'Any'
 
     for (const method of implementation.methods) {
@@ -197,6 +196,26 @@ static ArixValue *arix_array(size_t length, ArixValue **items) {
   result->length = length;
   result->items = items;
   return result;
+}
+
+static ArixValue *length(ArixValue *array) {
+  if (!array || array->tag != 4) {
+    return arix_int(0);
+  }
+  return arix_int((long)array->length);
+}
+
+static ArixValue *get(ArixValue *array, ArixValue *index) {
+  if (!array || array->tag != 4 || !index || index->tag != 1) {
+    return arix_unit();
+  }
+
+  long idx = index->intValue;
+  if (idx < 0 || (size_t)idx >= array->length) {
+    return arix_unit();
+  }
+
+  return array->items[idx];
 }
 
 `

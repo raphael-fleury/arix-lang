@@ -356,6 +356,13 @@ function print(x) {
 function printLine(x) { return print(x); }
 function intToString(x) { return String(x); }
 function concat(a, b) { return String(a) + String(b); }
+function length(xs) { return Array.isArray(xs) ? xs.length : 0; }
+function get(xs, index) {
+  if (!Array.isArray(xs)) return undefined;
+  if (!Number.isInteger(index)) return undefined;
+  if (index < 0 || index >= xs.length) return undefined;
+  return xs[index];
+}
 function add(a, b) { return a + b; }
 function sub(a, b) { return a - b; }
 function mul(a, b) { return a * b; }

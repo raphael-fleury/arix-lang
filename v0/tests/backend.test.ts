@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileSourceToC } from '../src/index.js'
+import { compileSourceToC, compileSourceToJS } from '../src/index.js'
 
 describe('backend', () => {
   it('emits C for a let-bound main lambda and arrays', () => {
@@ -93,5 +93,26 @@ describe('backend', () => {
     expect(result.diagnostics).toHaveLength(1)
     expect(result.diagnostics[0].code).toBe('ARX1000')
     expect(result.diagnostics[0].message).toContain('Unterminated string literal.')
+  })
+
+  it('emits array helper builtins length/get in JS and C backends', () => {
+    const source = `
+      let main: () => Int = () => {
+        let xs: Array<Int> = [10, 20, 30];
+        let size: Int = length(xs);
+        let first: Int = get(xs, 0);
+        add(size, first);
+      };
+    `
+
+    const cResult = compileSourceToC(source)
+    const jsResult = compileSourceToJS(source)
+
+    expect(cResult.diagnostics).toHaveLength(0)
+    expect(jsResult.diagnostics).toHaveLength(0)
+    expect(cResult.cSource).toContain('static ArixValue *length(ArixValue *array)')
+    expect(cResult.cSource).toContain('static ArixValue *get(ArixValue *array, ArixValue *index)')
+    expect(jsResult.jsSource).toContain('function length(xs)')
+    expect(jsResult.jsSource).toContain('function get(xs, index)')
   })
 })
