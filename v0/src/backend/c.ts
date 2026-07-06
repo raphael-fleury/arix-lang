@@ -218,6 +218,27 @@ static ArixValue *arrayGet(ArixValue *array, ArixValue *index) {
   return array->items[idx];
 }
 
+static ArixValue *intToString(ArixValue *value) {
+  if (!value || value->tag != 1) {
+    return arix_string("");
+  }
+
+  char buffer[64];
+  snprintf(buffer, sizeof(buffer), "%ld", value->intValue);
+  return arix_string(strdup(buffer));
+}
+
+static ArixValue *floatToString(ArixValue *value) {
+  if (!value) {
+    return arix_string("");
+  }
+
+  double floatValue = value->tag == 1 ? (double)value->intValue : value->floatValue;
+  char buffer[64];
+  snprintf(buffer, sizeof(buffer), "%.15g", floatValue);
+  return arix_string(strdup(buffer));
+}
+
 `
 }
 

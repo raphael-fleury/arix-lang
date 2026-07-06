@@ -621,6 +621,30 @@ describe('typechecker', () => {
     expect(diagnostics).toHaveLength(0)
   })
 
+  it('accepts floatToString for Float values', () => {
+    const program = desugar(parse(`
+      let main: () => IO<Unit> = () => {
+        let pi: Float = 3.14159;
+        printLine(floatToString(pi));
+      };
+    `))
+
+    const diagnostics = new TypeChecker().check(program, 'float-to-string-ok.arix')
+    expect(diagnostics).toHaveLength(0)
+  })
+
+  it('rejects floatToString for Int values', () => {
+    const program = desugar(parse(`
+      let main: () => IO<Unit> = () => {
+        let x: Int = 42;
+        printLine(floatToString(x));
+      };
+    `))
+
+    const diagnostics = new TypeChecker().check(program, 'float-to-string-type-error.arix')
+    expect(diagnostics.some(diag => diag.code === 'ARX2026')).toBe(true)
+  })
+
 })
 
 describe('module resolution', () => {

@@ -115,4 +115,25 @@ describe('backend', () => {
     expect(jsResult.jsSource).toContain('function arrayLength(xs)')
     expect(jsResult.jsSource).toContain('function arrayGet(xs, index)')
   })
+
+  it('emits number to string helpers intToString/floatToString in JS and C backends', () => {
+    const source = `
+      let main: () => IO<Unit> = () => {
+        let i: Int = 42;
+        let f: Float = 3.14159;
+        printLine(intToString(i));
+        printLine(floatToString(f));
+      };
+    `
+
+    const cResult = compileSourceToC(source)
+    const jsResult = compileSourceToJS(source)
+
+    expect(cResult.diagnostics).toHaveLength(0)
+    expect(jsResult.diagnostics).toHaveLength(0)
+    expect(cResult.cSource).toContain('static ArixValue *intToString(ArixValue *value)')
+    expect(cResult.cSource).toContain('static ArixValue *floatToString(ArixValue *value)')
+    expect(jsResult.jsSource).toContain('function intToString(x)')
+    expect(jsResult.jsSource).toContain('function floatToString(x)')
+  })
 })

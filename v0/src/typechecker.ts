@@ -542,6 +542,7 @@ export class TypeChecker {
       ['print', this.fnType([this.typeRef('T')], this.ioType(this.typeRef('Unit')))],
       ['printLine', this.fnType([this.typeRef('T')], this.ioType(this.typeRef('Unit')))],
       ['intToString', this.fnType([this.typeRef('Int')], this.typeRef('String'))],
+      ['floatToString', this.fnType([this.typeRef('Float')], this.typeRef('String'))],
       ['concat', this.fnType([this.typeRef('String'), this.typeRef('String')], this.typeRef('String'))],
       ['arrayLength', this.fnType([this.typeRef('Array', this.typeRef('T'))], this.typeRef('Int'))],
       ['arrayGet', this.fnType([this.typeRef('Array', this.typeRef('T')), this.typeRef('Int')], this.typeRef('T'))],

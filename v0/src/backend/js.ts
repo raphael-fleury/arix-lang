@@ -355,6 +355,7 @@ function print(x) {
 }
 function printLine(x) { return print(x); }
 function intToString(x) { return String(x); }
+function floatToString(x) { return String(x); }
 function concat(a, b) { return String(a) + String(b); }
 function arrayLength(xs) { return Array.isArray(xs) ? xs.length : 0; }
 function arrayGet(xs, index) {
