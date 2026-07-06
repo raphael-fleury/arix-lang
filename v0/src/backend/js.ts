@@ -356,8 +356,8 @@ function print(x) {
 function printLine(x) { return print(x); }
 function intToString(x) { return String(x); }
 function concat(a, b) { return String(a) + String(b); }
-function length(xs) { return Array.isArray(xs) ? xs.length : 0; }
-function get(xs, index) {
+function arrayLength(xs) { return Array.isArray(xs) ? xs.length : 0; }
+function arrayGet(xs, index) {
   if (!Array.isArray(xs)) return undefined;
   if (!Number.isInteger(index)) return undefined;
   if (index < 0 || index >= xs.length) return undefined;

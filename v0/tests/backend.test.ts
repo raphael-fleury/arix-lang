@@ -95,12 +95,12 @@ describe('backend', () => {
     expect(result.diagnostics[0].message).toContain('Unterminated string literal.')
   })
 
-  it('emits array helper builtins length/get in JS and C backends', () => {
+  it('emits array helper builtins arrayLength/arrayGet in JS and C backends', () => {
     const source = `
       let main: () => Int = () => {
         let xs: Array<Int> = [10, 20, 30];
-        let size: Int = length(xs);
-        let first: Int = get(xs, 0);
+        let size: Int = arrayLength(xs);
+        let first: Int = arrayGet(xs, 0);
         add(size, first);
       };
     `
@@ -110,9 +110,9 @@ describe('backend', () => {
 
     expect(cResult.diagnostics).toHaveLength(0)
     expect(jsResult.diagnostics).toHaveLength(0)
-    expect(cResult.cSource).toContain('static ArixValue *length(ArixValue *array)')
-    expect(cResult.cSource).toContain('static ArixValue *get(ArixValue *array, ArixValue *index)')
-    expect(jsResult.jsSource).toContain('function length(xs)')
-    expect(jsResult.jsSource).toContain('function get(xs, index)')
+    expect(cResult.cSource).toContain('static ArixValue *arrayLength(ArixValue *array)')
+    expect(cResult.cSource).toContain('static ArixValue *arrayGet(ArixValue *array, ArixValue *index)')
+    expect(jsResult.jsSource).toContain('function arrayLength(xs)')
+    expect(jsResult.jsSource).toContain('function arrayGet(xs, index)')
   })
 })

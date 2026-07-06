@@ -198,14 +198,14 @@ static ArixValue *arix_array(size_t length, ArixValue **items) {
   return result;
 }
 
-static ArixValue *length(ArixValue *array) {
+static ArixValue *arrayLength(ArixValue *array) {
   if (!array || array->tag != 4) {
     return arix_int(0);
   }
   return arix_int((long)array->length);
 }
 
-static ArixValue *get(ArixValue *array, ArixValue *index) {
+static ArixValue *arrayGet(ArixValue *array, ArixValue *index) {
   if (!array || array->tag != 4 || !index || index->tag != 1) {
     return arix_unit();
   }
