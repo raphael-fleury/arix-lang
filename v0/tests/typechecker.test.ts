@@ -609,11 +609,11 @@ describe('typechecker', () => {
   it('accepts IO-annotated impure functions with builtin calls', () => {
     const program = desugar(parse(`
       let main: () => IO<Unit> = () => {
-        printLine("hello");
         let xs: Array<Int> = [1, 2, 3];
         let n: Int = arrayLength(xs);
         let first: Int = arrayGet(xs, 0);
-        print(add(n, first));
+        let total: Int = add(n, first);
+        printLine(concat("total=", intToString(total)));
       };
     `))
 
