@@ -605,6 +605,22 @@ describe('typechecker', () => {
     const diagnostics = new TypeChecker().check(program, 'infer-structural-ok.arix')
     expect(diagnostics.some(diag => diag.code === 'ARX2032')).toBe(false)
   })
+
+  it('accepts IO-annotated impure functions with builtin calls', () => {
+    const program = desugar(parse(`
+      let main: () => IO<Unit> = () => {
+        printLine("hello");
+        let xs: Array<Int> = [1, 2, 3];
+        let n: Int = arrayLength(xs);
+        let first: Int = arrayGet(xs, 0);
+        print(add(n, first));
+      };
+    `))
+
+    const diagnostics = new TypeChecker().check(program, 'io-builtins.arix')
+    expect(diagnostics).toHaveLength(0)
+  })
+
 })
 
 describe('module resolution', () => {

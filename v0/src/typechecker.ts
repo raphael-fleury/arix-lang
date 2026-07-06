@@ -17,6 +17,7 @@ interface VariantInfo {
 export class TypeChecker {
   private enumInfos = new Map<string, EnumInfo>()
   private variantInfos = new Map<string, VariantInfo>()
+  private readonly builtinSignatures = this.createBuiltinSignatures()
 
   check(program: IrProgram, filePath: string): Diagnostic[] {
     this.enumInfos = new Map()
@@ -220,7 +221,7 @@ export class TypeChecker {
   }
 
   private collectFunctionSignatures(program: IrProgram): Map<string, FunctionTypeReference> {
-    const signatures = new Map<string, FunctionTypeReference>()
+    const signatures = new Map<string, FunctionTypeReference>(this.builtinSignatures)
     for (const item of program.body) {
       if (item.type !== 'FunctionDecl') {
         continue
@@ -529,7 +530,55 @@ export class TypeChecker {
     if (signature) {
       return signature
     }
+    const builtin = this.builtinSignatures.get(name)
+    if (builtin) {
+      return builtin
+    }
     return this.unknownType()
+  }
+
+  private createBuiltinSignatures(): Map<string, FunctionTypeReference> {
+    return new Map<string, FunctionTypeReference>([
+      ['print', this.fnType([this.typeRef('T')], this.ioType(this.typeRef('Unit')))],
+      ['printLine', this.fnType([this.typeRef('T')], this.ioType(this.typeRef('Unit')))],
+      ['intToString', this.fnType([this.typeRef('Int')], this.ioType(this.typeRef('String')))],
+      ['concat', this.fnType([this.typeRef('String'), this.typeRef('String')], this.ioType(this.typeRef('String')))],
+      ['arrayLength', this.fnType([this.typeRef('Array', this.typeRef('T'))], this.ioType(this.typeRef('Int')))],
+      ['arrayGet', this.fnType([this.typeRef('Array', this.typeRef('T')), this.typeRef('Int')], this.ioType(this.typeRef('T')))],
+      ['add', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Int')))],
+      ['sub', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Int')))],
+      ['mul', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Int')))],
+      ['div', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Int')))],
+      ['mod', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Int')))],
+      ['eq', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Bool')))],
+      ['lt', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Bool')))],
+      ['gt', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Bool')))],
+      ['lte', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Bool')))],
+      ['gte', this.fnType([this.typeRef('Int'), this.typeRef('Int')], this.ioType(this.typeRef('Bool')))],
+      ['not', this.fnType([this.typeRef('Bool')], this.ioType(this.typeRef('Bool')))],
+      ['and', this.fnType([this.typeRef('Bool'), this.typeRef('Bool')], this.ioType(this.typeRef('Bool')))],
+      ['or', this.fnType([this.typeRef('Bool'), this.typeRef('Bool')], this.ioType(this.typeRef('Bool')))],
+    ])
+  }
+
+  private fnType(params: TypeAnnotation[], returnType: TypeAnnotation): FunctionTypeReference {
+    return {
+      type: 'FunctionTypeReference',
+      params,
+      returnType,
+    }
+  }
+
+  private ioType(inner: TypeAnnotation): TypeAnnotation {
+    return this.typeRef('IO', inner)
+  }
+
+  private typeRef(name: string, ...typeArgs: TypeAnnotation[]): TypeAnnotation {
+    return {
+      type: 'TypeReference',
+      name,
+      typeArgs,
+    }
   }
 
   private inferConstructorExprType(
@@ -1389,15 +1438,66 @@ export class TypeChecker {
   }
 
   private compatibleTypeReference(expected: Extract<TypeAnnotation, { type: 'TypeReference' }>, actual: Extract<TypeAnnotation, { type: 'TypeReference' }>): boolean {
+    if (this.isIoBridgeCompatible(expected, actual)) {
+      return true
+    }
+    return this.compatibleTypeReferenceWithoutIoBridge(expected, actual)
+  }
+
+  private isIoBridgeCompatible(
+    expected: Extract<TypeAnnotation, { type: 'TypeReference' }>,
+    actual: Extract<TypeAnnotation, { type: 'TypeReference' }>,
+  ): boolean {
+    const expectedInner = this.unwrapIo(expected)
+    const actualInner = this.unwrapIo(actual)
+    if (!expectedInner && !actualInner) {
+      return false
+    }
+
+    const expectedCore = expectedInner ?? expected
+    const actualCore = actualInner ?? actual
+    return this.compatibleTypeReferenceWithoutIoBridge(expectedCore, actualCore)
+  }
+
+  private compatibleTypeReferenceWithoutIoBridge(
+    expected: Extract<TypeAnnotation, { type: 'TypeReference' }>,
+    actual: Extract<TypeAnnotation, { type: 'TypeReference' }>,
+  ): boolean {
+    if (this.isStringLikeType(expected) && this.isStringLikeType(actual)) {
+      return true
+    }
+
     if (expected.name !== actual.name || expected.typeArgs.length !== actual.typeArgs.length) {
       return false
     }
+
     for (let index = 0; index < expected.typeArgs.length; index += 1) {
       if (!this.compatibleType(expected.typeArgs[index], actual.typeArgs[index])) {
         return false
       }
     }
+
     return true
+  }
+
+  private isStringLikeType(type: Extract<TypeAnnotation, { type: 'TypeReference' }>): boolean {
+    if (type.name === 'String' && type.typeArgs.length === 0) {
+      return true
+    }
+
+    return type.name === 'Array'
+      && type.typeArgs.length === 1
+      && type.typeArgs[0].type === 'TypeReference'
+      && type.typeArgs[0].name === 'Char'
+      && type.typeArgs[0].typeArgs.length === 0
+  }
+
+  private unwrapIo(type: Extract<TypeAnnotation, { type: 'TypeReference' }>): Extract<TypeAnnotation, { type: 'TypeReference' }> | undefined {
+    if (type.name !== 'IO' || type.typeArgs.length !== 1) {
+      return undefined
+    }
+    const inner = type.typeArgs[0]
+    return inner.type === 'TypeReference' ? inner : undefined
   }
 
   private compatibleFunctionType(
