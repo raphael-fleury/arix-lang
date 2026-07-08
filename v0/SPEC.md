@@ -64,8 +64,9 @@ typeclass Readable<T> {
     read: (text: Array<Char>) => T;
 }
 
-read<Bool>(['t','r','u','e']);
-read<Int>(['1','0']);
+read<Bool>("true");
+read<Int>("-10");
+read<Float>("10.0");
 ```
 
 ### 2.7 Typeclass implementations
@@ -97,7 +98,7 @@ match result {
 ## 3. Types
 
 ### 3.1 Built-in Types
-- `Int`, `Float`, `Char`, `Bool`, `Array<T>`
+- `Int`, `Float`, `Char`, `Bool`, `Array<T>`, `String`
 
 ### 3.2 Generic Types
 - `List<T>`, `Maybe<T>`, `Result<TSuccess, TError>`
