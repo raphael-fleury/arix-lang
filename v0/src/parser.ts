@@ -329,6 +329,36 @@ class Parser {
     if (this.check('(')) {
       return this.parseFunctionTypeReference()
     }
+
+    const firstType = this.parseTypeReference()
+
+    if (this.consumeOptional('=>')) {
+      return {
+        type: 'FunctionTypeReference',
+        params: [firstType],
+        returnType: this.parseTypeAnnotation(),
+      }
+    }
+
+    if (this.consumeOptional(',')) {
+      const params: TypeAnnotation[] = [firstType]
+      do {
+        params.push(this.check('(') ? this.parseFunctionTypeReference() : this.parseTypeReference())
+      } while (this.consumeOptional(','))
+
+      if (this.consumeOptional('=>')) {
+        return {
+          type: 'FunctionTypeReference',
+          params,
+          returnType: this.parseTypeAnnotation(),
+        }
+      }
+    }
+
+    return firstType
+  }
+
+  private parseTypeReference(): TypeAnnotation {
     const name = this.consumeIdentifier('Expected type name')
     const typeArgs = this.match('<') ? this.parseTypeArgumentList('>') : []
     return { type: 'TypeReference', name, typeArgs }

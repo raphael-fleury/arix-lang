@@ -39,6 +39,22 @@ describe('parser', () => {
     expect(letDecl.value.genericArgs).toHaveLength(1)
   })
 
+  it('parses function type annotations with or without parentheses', () => {
+    const program = parse(`
+      let unary: Int => Int = value;
+      let binary: Int, Float => Int = value;
+      let zero: () => Int = value;
+    `)
+
+    const [unary, binary, zero] = program.body as any[]
+    expect(unary.declaredType.type).toBe('FunctionTypeReference')
+    expect(unary.declaredType.params).toHaveLength(1)
+    expect(binary.declaredType.type).toBe('FunctionTypeReference')
+    expect(binary.declaredType.params).toHaveLength(2)
+    expect(zero.declaredType.type).toBe('FunctionTypeReference')
+    expect(zero.declaredType.params).toHaveLength(0)
+  })
+
   it('parses match arm guards with when', () => {
     const program = parse(`
       let main: () => Int = () => match value {
